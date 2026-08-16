@@ -6,6 +6,7 @@ import { PreviewDrawer } from './components/PreviewDrawer';
 import { StoragePage } from './components/StoragePage';
 import { SettingsPage } from './components/SettingsPage';
 import { UpdateModal } from './components/UpdateModal';
+import { ConfirmModal, ConfirmModalConfig } from './components/ConfirmModal';
 import { VaultNode, StorageMetrics, SearchQuery, UpdateState } from '@shared/types';
 import { api } from './services/api';
 
@@ -17,6 +18,21 @@ export const App: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<VaultNode | null>(null);
   const [metrics, setMetrics] = useState<StorageMetrics | null>(null);
   
+  // Custom Vault Dialog / Alert state
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmModalConfig | null>(null);
+
+  const showAlert = (title: string, message: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      confirmText: 'OK',
+      cancelText: null,
+      variant: 'info',
+      onConfirm: () => {},
+    });
+  };
+
   // Filtering & View state
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -166,7 +182,7 @@ export const App: React.FC = () => {
       fetchNodes();
       fetchMetrics();
     } catch (err: any) {
-      alert(`Could not create folder: ${err.message}`);
+      showAlert('Folder Creation Error', `Could not create folder: ${err.message}`);
     }
   };
 
@@ -174,12 +190,12 @@ export const App: React.FC = () => {
     try {
       const result = await api.selectAndImportFiles(currentFolderId);
       if (result.failed && result.failed.length > 0) {
-        alert(`Failed to import ${result.failed.length} file(s): ${result.failed[0].error}`);
+        showAlert('Import Error', `Failed to import ${result.failed.length} file(s): ${result.failed[0].error}`);
       }
       fetchNodes();
       fetchMetrics();
     } catch (err: any) {
-      alert(`Import error: ${err.message}`);
+      showAlert('Import Error', `Import failed: ${err.message}`);
     }
   };
 
@@ -224,19 +240,50 @@ export const App: React.FC = () => {
       }
       fetchNodes();
     } catch (err: any) {
-      alert(`Rename failed: ${err.message}`);
+      showAlert('Rename Error', `Rename failed: ${err.message}`);
     }
   };
 
-  const handleTrashNode = async (node: VaultNode) => {
-    try {
-      await api.trashNode(node.id, true);
-      if (selectedNode?.id === node.id) setSelectedNode(null);
-      fetchNodes();
-      fetchMetrics();
-    } catch (err: any) {
-      alert(`Failed to trash: ${err.message}`);
-    }
+  const handleDeletePermanent = (node: VaultNode) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: `Delete "${node.name}" permanently?`,
+      message: `This item will be permanently shredded from Vault storage. This action cannot be undone.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.deletePermanently(node.id);
+          if (selectedNode?.id === node.id) setSelectedNode(null);
+          fetchNodes();
+          fetchMetrics();
+        } catch (err: any) {
+          showAlert('Deletion Error', `Failed to delete: ${err.message}`);
+        }
+      },
+    });
+  };
+
+  const handleDeletePermanentMultiple = (targetNodes: VaultNode[]) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: `Delete ${targetNodes.length} items permanently?`,
+      message: `Permanently shred ${targetNodes.length} items from Vault storage? This action cannot be undone.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await Promise.all(targetNodes.map(n => api.deletePermanently(n.id)));
+          if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
+          fetchNodes();
+          fetchMetrics();
+        } catch (err: any) {
+          showAlert('Deletion Error', `Failed to delete items: ${err.message}`);
+        }
+      },
+    });
   };
 
   const handleRestoreNode = async (node: VaultNode) => {
@@ -246,46 +293,7 @@ export const App: React.FC = () => {
       fetchNodes();
       fetchMetrics();
     } catch (err: any) {
-      alert(`Failed to restore: ${err.message}`);
-    }
-  };
-
-  const handleDeletePermanent = async (node: VaultNode) => {
-    if (!window.confirm(`Permanently shred "${node.name}" from Vault? This cannot be undone.`)) return;
-    try {
-      await api.deletePermanently(node.id);
-      if (selectedNode?.id === node.id) setSelectedNode(null);
-      fetchNodes();
-      fetchMetrics();
-    } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
-    }
-  };
-
-  const handleExportNode = async (node: VaultNode) => {
-    try {
-      await api.exportFile(node.id);
-    } catch (err: any) {
-      alert(`Export error: ${err.message}`);
-    }
-  };
-
-  const handleOpenWithDefault = async (node: VaultNode) => {
-    try {
-      await api.openWithDefaultApp(node.id);
-    } catch (err: any) {
-      alert(`Could not open file: ${err.message}`);
-    }
-  };
-
-  const handleTrashMultiple = async (targetNodes: VaultNode[]) => {
-    try {
-      await Promise.all(targetNodes.map(n => api.trashNode(n.id, true)));
-      if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
-      fetchNodes();
-      fetchMetrics();
-    } catch (err: any) {
-      alert(`Failed to trash items: ${err.message}`);
+      showAlert('Restore Error', `Failed to restore: ${err.message}`);
     }
   };
 
@@ -296,19 +304,15 @@ export const App: React.FC = () => {
       fetchNodes();
       fetchMetrics();
     } catch (err: any) {
-      alert(`Failed to restore items: ${err.message}`);
+      showAlert('Restore Error', `Failed to restore items: ${err.message}`);
     }
   };
 
-  const handleDeletePermanentMultiple = async (targetNodes: VaultNode[]) => {
-    if (!window.confirm(`Permanently shred ${targetNodes.length} items from Vault? This cannot be undone.`)) return;
+  const handleExportNode = async (node: VaultNode) => {
     try {
-      await Promise.all(targetNodes.map(n => api.deletePermanently(n.id)));
-      if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
-      fetchNodes();
-      fetchMetrics();
+      await api.exportFile(node.id);
     } catch (err: any) {
-      alert(`Failed to delete items: ${err.message}`);
+      showAlert('Export Error', `Export error: ${err.message}`);
     }
   };
 
@@ -330,6 +334,14 @@ export const App: React.FC = () => {
       fetchNodes();
     } catch (err: any) {
       console.error(err);
+    }
+  };
+
+  const handleOpenWithDefault = async (node: VaultNode) => {
+    try {
+      await api.openWithDefaultApp(node.id);
+    } catch (err: any) {
+      showAlert('Open Error', `Could not open file: ${err.message}`);
     }
   };
 
@@ -366,7 +378,7 @@ export const App: React.FC = () => {
       try {
         const result = await api.importFilePaths(filePaths, currentFolderId, false);
         if (result.failed && result.failed.length > 0) {
-          alert(`Failed to import ${result.failed.length} file(s): ${result.failed[0].error}`);
+          showAlert('Import Warning', `Failed to import ${result.failed.length} file(s): ${result.failed[0].error}`);
         }
       } catch (err: any) {
         console.error('Error importing file paths:', err);
@@ -376,7 +388,7 @@ export const App: React.FC = () => {
     for (const file of bufferFiles) {
       try {
         if (file.size > 500 * 1024 * 1024) {
-          alert(`File "${file.name}" is too large for buffer drag-and-drop (>500MB). Please use the Import button to select it.`);
+          showAlert('File Too Large', `File "${file.name}" is too large for buffer drag-and-drop (>500MB). Please use the Import button to select it.`);
           continue;
         }
         const arrayBuffer = await file.arrayBuffer();
@@ -470,12 +482,12 @@ export const App: React.FC = () => {
               onOpenNode={handleOpenNode}
               onToggleStar={handleToggleStar}
               onRenameNode={handleOpenRenameModal}
-              onTrashNode={handleTrashNode}
+              onTrashNode={handleDeletePermanent}
               onRestoreNode={handleRestoreNode}
               onDeletePermanent={handleDeletePermanent}
               onExportNode={handleExportNode}
               onOpenWithDefault={handleOpenWithDefault}
-              onTrashMultiple={handleTrashMultiple}
+              onTrashMultiple={handleDeletePermanentMultiple}
               onRestoreMultiple={handleRestoreMultiple}
               onDeletePermanentMultiple={handleDeletePermanentMultiple}
               onExportMultiple={handleExportMultiple}
@@ -572,6 +584,7 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* Update Modal */}
       {showUpdateModal && updateState && (
         <UpdateModal
@@ -582,6 +595,13 @@ export const App: React.FC = () => {
           onDismiss={handleDismissUpdate}
         />
       )}
+
+      {/* Vault Custom Confirm / Alert Modal */}
+      <ConfirmModal
+        config={confirmConfig}
+        onClose={() => setConfirmConfig(null)}
+      />
     </div>
   );
 };
+

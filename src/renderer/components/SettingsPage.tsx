@@ -16,6 +16,8 @@ import { api } from '../services/api';
 import { UpdateState } from '@shared/types';
 import logoImg from '../assets/logo.jpg';
 
+import { ConfirmModal, ConfirmModalConfig } from './ConfirmModal';
+
 interface SettingsPageProps {
   onRefresh: () => void;
   updateState?: UpdateState | null;
@@ -35,8 +37,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [running, setRunning] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [appVersion, setAppVersion] = useState<string>('0.2.49');
+  const [appVersion, setAppVersion] = useState<string>('0.2.50');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmModalConfig | null>(null);
 
   useEffect(() => {
     if (api?.getAppVersion) {
@@ -44,15 +47,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   }, []);
 
-  const handleEmptyTrash = async () => {
-    if (!window.confirm('Empty trash and shred unreferenced physical CAS objects?')) return;
-    try {
-      await api.emptyTrash();
-      setStatusMsg('Trash emptied successfully.');
-      onRefresh();
-    } catch (err: any) {
-      setStatusMsg(`Error: ${err.message}`);
-    }
+  const handleEmptyTrash = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Empty Trash & Shred Storage?',
+      message: 'This will permanently shred all unreferenced physical CAS objects from disk. This cannot be undone.',
+      confirmText: 'Empty Trash & Shred',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.emptyTrash();
+          setStatusMsg('Trash emptied and storage reclaimed successfully.');
+          onRefresh();
+        } catch (err: any) {
+          setStatusMsg(`Error: ${err.message}`);
+        }
+      },
+    });
   };
 
   const handleIntegrityCheck = async () => {
@@ -274,6 +286,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </p>
         </div>
       </div>
+
+      <ConfirmModal
+        config={confirmConfig}
+        onClose={() => setConfirmConfig(null)}
+      />
     </div>
   );
 };

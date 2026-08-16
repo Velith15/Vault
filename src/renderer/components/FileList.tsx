@@ -469,7 +469,7 @@ export const FileList: React.FC<FileListProps> = ({
                   className="hover:text-rose-400 flex items-center gap-1.5 transition-colors font-medium"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Move to Trash</span>
+                  <span>Delete ({selectedIds.size})</span>
                 </button>
               )}
             </>
@@ -559,7 +559,7 @@ export const FileList: React.FC<FileListProps> = ({
                     className="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 transition-colors font-medium"
                   >
                     <Trash2 className="w-4 h-4" />
-                    <span>Trash {selectedIds.size} Items</span>
+                    <span>Delete {selectedIds.size} Items Permanently</span>
                   </button>
                 )}
               </>
@@ -630,10 +630,10 @@ export const FileList: React.FC<FileListProps> = ({
 
                 <button
                   onClick={() => { onTrashNode(contextMenu.node); setContextMenu(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 transition-colors font-medium"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Delete (Move to Trash)</span>
+                  <span>Delete Permanently</span>
                 </button>
               </>
             ) : (
