@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 import { VaultNode } from '@shared/types';
+import { api } from '../services/api';
 import { formatBytes, formatDate, getFileCategory } from '../utils/formatters';
 
 interface ContextMenuState {
@@ -253,7 +254,7 @@ export const FileList: React.FC<FileListProps> = ({
       let isMounted = true;
       if (node.type === 'file' && (cat === 'image' || cat === 'video') && node.objectHash && node.size <= 80 * 1024 * 1024) {
         api.getObjectBlobUrl(node.objectHash)
-          .then((url) => {
+          .then((url: string) => {
             if (isMounted) setThumbUrl(url);
           })
           .catch(() => {});
