@@ -295,8 +295,35 @@ export const App: React.FC = () => {
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
 
+    const filePaths: string[] = [];
+    const bufferFiles: File[] = [];
+
     for (const file of files) {
+      const filePath = (file as any).path;
+      if (filePath) {
+        filePaths.push(filePath);
+      } else {
+        bufferFiles.push(file);
+      }
+    }
+
+    if (filePaths.length > 0) {
       try {
+        const result = await api.importFilePaths(filePaths, currentFolderId, false);
+        if (result.failed && result.failed.length > 0) {
+          alert(`Failed to import ${result.failed.length} file(s): ${result.failed[0].error}`);
+        }
+      } catch (err: any) {
+        console.error('Error importing file paths:', err);
+      }
+    }
+
+    for (const file of bufferFiles) {
+      try {
+        if (file.size > 500 * 1024 * 1024) {
+          alert(`File "${file.name}" is too large for buffer drag-and-drop (>500MB). Please use the Import button to select it.`);
+          continue;
+        }
         const arrayBuffer = await file.arrayBuffer();
         const uint8 = new Uint8Array(arrayBuffer);
         await api.importBuffer(uint8, file.name, currentFolderId);

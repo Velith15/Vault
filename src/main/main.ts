@@ -202,6 +202,10 @@ function setupIpcHandlers() {
     if (!fs.existsSync(objPath)) {
       throw new Error('Object not found');
     }
+    const stat = await fs.promises.stat(objPath);
+    if (stat.size > 100 * 1024 * 1024) {
+      throw new Error('File is too large for inline preview Data URL (>100MB)');
+    }
     const buffer = await fs.promises.readFile(objPath);
     // Find mime
     const base64 = buffer.toString('base64');

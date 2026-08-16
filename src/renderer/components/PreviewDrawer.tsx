@@ -46,9 +46,11 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
       .then((data) => {
         setPreviewData(data);
         if (data.mimeType.startsWith('image/') || data.mimeType.startsWith('video/') || data.mimeType.startsWith('audio/')) {
-          return api.getObjectBlobUrl(data.hash).then((url) => {
-            setDataUrl(url);
-          });
+          if (data.size <= 100 * 1024 * 1024) {
+            return api.getObjectBlobUrl(data.hash).then((url) => {
+              setDataUrl(url);
+            });
+          }
         }
       })
       .catch((err) => {
@@ -92,6 +94,17 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
             <div className="w-full h-full p-3 font-mono text-[11px] text-[#09090B] bg-white overflow-auto max-h-[240px] whitespace-pre">
               {previewData.textContent.slice(0, 4000)}
               {previewData.textContent.length > 4000 && '\n\n... (preview truncated)'}
+            </div>
+          ) : node.size > 100 * 1024 * 1024 ? (
+            <div className="p-6 text-center">
+              <FileText className="w-8 h-8 mx-auto text-[#A1A1AA] mb-2" />
+              <div className="text-[12px] text-[#71717A]">File exceeds 100MB (inline preview disabled)</div>
+              <button
+                onClick={() => onOpenWithDefault(node)}
+                className="mt-2 text-[11px] text-[#09090B] font-medium underline"
+              >
+                Open with default app
+              </button>
             </div>
           ) : (
             <div className="p-6 text-center">

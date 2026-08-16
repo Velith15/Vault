@@ -84,7 +84,6 @@ export const FileList: React.FC<FileListProps> = ({
   const handleContextMenu = (e: React.MouseEvent, node: VaultNode) => {
     e.preventDefault();
     e.stopPropagation();
-    onSelectNode(node);
 
     // Keep menu inside viewport boundaries
     const clickX = e.clientX;
@@ -141,7 +140,7 @@ export const FileList: React.FC<FileListProps> = ({
       {viewMode === 'grid' ? (
         <div className="p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
           {nodes.map((node) => {
-            const isSelected = selectedNodeId === node.id;
+            const isSelected = selectedNodeId === node.id || contextMenu?.node.id === node.id;
             return (
               <div
                 key={node.id}
@@ -201,7 +200,7 @@ export const FileList: React.FC<FileListProps> = ({
           {/* Rows */}
           <div className="divide-y divide-[#F1F1F4]">
             {nodes.map((node) => {
-              const isSelected = selectedNodeId === node.id;
+              const isSelected = selectedNodeId === node.id || contextMenu?.node.id === node.id;
 
               return (
                 <div

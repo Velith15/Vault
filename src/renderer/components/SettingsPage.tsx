@@ -35,7 +35,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [running, setRunning] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [appVersion, setAppVersion] = useState<string>('0.2.47');
+  const [appVersion, setAppVersion] = useState<string>('0.2.48');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {

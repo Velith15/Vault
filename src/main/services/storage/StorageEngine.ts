@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import mime from 'mime-types';
 import { DatabaseService } from '../database/DatabaseService';
@@ -67,14 +68,15 @@ export class StorageEngine {
     const readStream = fs.createReadStream(sourceFilePath);
     const writeStream = fs.createWriteStream(tempFilePath);
 
-    let bytesWritten = 0;
-    readStream.on('data', (chunk) => {
-      bytesWritten += chunk.length;
-      hashStream.update(chunk);
+    const hashTransform = new Transform({
+      transform(chunk, encoding, callback) {
+        hashStream.update(chunk);
+        callback(null, chunk);
+      },
     });
 
     try {
-      await pipeline(readStream, writeStream);
+      await pipeline(readStream, hashTransform, writeStream);
     } catch (err: any) {
       // Clean up temp file on failure
       if (fs.existsSync(tempFilePath)) {
