@@ -41,6 +41,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'Vault',
+    icon: path.join(__dirname, '../../build/icon.png'),
     backgroundColor: '#FAFAFA',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
@@ -55,7 +56,7 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
   }
 
   mainWindow.on('closed', () => {
