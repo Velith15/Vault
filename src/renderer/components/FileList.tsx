@@ -241,27 +241,79 @@ export const FileList: React.FC<FileListProps> = ({
     }
   };
 
-  const getFileIcon = (node: VaultNode) => {
+  const ThumbnailPreview: React.FC<{ node: VaultNode; className?: string; isGrid?: boolean }> = ({ 
+    node, 
+    className = 'w-4 h-4', 
+    isGrid = false 
+  }) => {
+    const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+    const cat = getFileCategory(node.name, node.mimeType);
+
+    useEffect(() => {
+      let isMounted = true;
+      if (node.type === 'file' && (cat === 'image' || cat === 'video') && node.objectHash && node.size <= 80 * 1024 * 1024) {
+        api.getObjectBlobUrl(node.objectHash)
+          .then((url) => {
+            if (isMounted) setThumbUrl(url);
+          })
+          .catch(() => {});
+      }
+      return () => {
+        isMounted = false;
+      };
+    }, [node.id, node.objectHash, cat, node.size]);
+
+    if (thumbUrl && cat === 'image') {
+      return (
+        <img 
+          src={thumbUrl} 
+          alt={node.name} 
+          className={isGrid ? "w-full h-full object-cover rounded-lg" : "w-5 h-5 object-cover rounded shadow-2xs"} 
+        />
+      );
+    }
+
+    if (thumbUrl && cat === 'video') {
+      return (
+        <div className="relative w-full h-full flex items-center justify-center bg-black rounded-lg overflow-hidden">
+          <video 
+            src={thumbUrl} 
+            className="w-full h-full object-cover opacity-90" 
+            muted 
+            playsInline
+            preload="metadata" 
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <Film className="w-3.5 h-3.5 text-white/90 drop-shadow" />
+          </div>
+        </div>
+      );
+    }
+
+    // Default icon fallbacks
+    switch (cat) {
+      case 'image':
+        return <Image className={`${className} text-emerald-600`} />;
+      case 'video':
+        return <Film className={`${className} text-rose-600`} />;
+      case 'audio':
+        return <Music className={`${className} text-amber-600`} />;
+      case 'document':
+        return <FileText className={`${className} text-blue-600`} />;
+      case 'code':
+        return <Code className={`${className} text-indigo-600`} />;
+      case 'archive':
+        return <Archive className={`${className} text-amber-700`} />;
+      default:
+        return <File className={`${className} text-[#71717A]`} />;
+    }
+  };
+
+  const getFileIcon = (node: VaultNode, isGrid: boolean = false) => {
     if (node.type === 'folder') {
       return <Folder className="w-4 h-4 text-[#18181B] fill-[#E4E4E7]" />;
     }
-    const cat = getFileCategory(node.name, node.mimeType);
-    switch (cat) {
-      case 'image':
-        return <Image className="w-4 h-4 text-emerald-600" />;
-      case 'video':
-        return <Film className="w-4 h-4 text-rose-600" />;
-      case 'audio':
-        return <Music className="w-4 h-4 text-amber-600" />;
-      case 'document':
-        return <FileText className="w-4 h-4 text-blue-600" />;
-      case 'code':
-        return <Code className="w-4 h-4 text-indigo-600" />;
-      case 'archive':
-        return <Archive className="w-4 h-4 text-amber-700" />;
-      default:
-        return <File className="w-4 h-4 text-[#71717A]" />;
-    }
+    return <ThumbnailPreview node={node} isGrid={isGrid} />;
   };
 
   if (nodes.length === 0) {
@@ -306,6 +358,9 @@ export const FileList: React.FC<FileListProps> = ({
         <div className="p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
           {nodes.map((node, index) => {
             const isSelected = selectedIds.has(node.id) || contextMenu?.node.id === node.id;
+            const cat = getFileCategory(node.name, node.mimeType);
+            const isMedia = cat === 'image' || cat === 'video';
+
             return (
               <div
                 key={node.id}
@@ -313,20 +368,26 @@ export const FileList: React.FC<FileListProps> = ({
                 onClick={(e) => handleNodeClick(e, node, index)}
                 onDoubleClick={() => onOpenNode(node)}
                 onContextMenu={(e) => handleContextMenu(e, node)}
-                className={`group relative p-3.5 rounded-xl border text-left transition-all duration-150 cursor-pointer flex flex-col justify-between h-36 ${
+                className={`group relative p-2.5 rounded-xl border text-left transition-all duration-150 cursor-pointer flex flex-col justify-between h-40 ${
                   isSelected
                     ? 'bg-[#F4F4F5] border-[#09090B] shadow-xs'
                     : 'bg-white border-[#E4E4E7]/80 hover:border-[#D4D4D8] hover:bg-[#FAFAFA] hover:shadow-2xs'
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="p-2.5 rounded-lg bg-[#F4F4F5] border border-[#E4E4E7]/60 shadow-2xs">
-                    {getFileIcon(node)}
-                  </div>
+                {/* Media preview container or icon */}
+                <div className="relative w-full h-24 rounded-lg bg-[#F4F4F5] border border-[#E4E4E7]/60 overflow-hidden flex items-center justify-center shadow-2xs">
+                  {isMedia ? (
+                    <ThumbnailPreview node={node} isGrid={true} />
+                  ) : (
+                    <div className="p-3">
+                      {getFileIcon(node)}
+                    </div>
+                  )}
+
                   {!isTrashView && (
                     <button
                       onClick={(e) => onToggleStar(node, e)}
-                      className={`p-1 rounded-md hover:bg-[#E4E4E7] transition-colors ${
+                      className={`absolute top-1.5 right-1.5 p-1 rounded-md bg-white/80 backdrop-blur-xs hover:bg-white shadow-2xs transition-all ${
                         node.isStarred ? 'text-amber-500' : 'text-[#D4D4D8] opacity-0 group-hover:opacity-100'
                       }`}
                     >
@@ -335,14 +396,14 @@ export const FileList: React.FC<FileListProps> = ({
                   )}
                 </div>
 
-                <div>
-                  <div className="font-sans text-[13px] font-medium text-[#09090B] truncate tracking-tight" title={node.name}>
+                <div className="pt-1 px-1">
+                  <div className="font-sans text-[12.5px] font-medium text-[#09090B] truncate tracking-tight" title={node.name}>
                     {node.name}
                   </div>
-                  <div className="text-[11px] text-[#A1A1AA] flex items-center justify-between mt-1 font-mono">
+                  <div className="text-[11px] text-[#A1A1AA] flex items-center justify-between mt-0.5 font-mono">
                     <span>{node.type === 'folder' ? 'Folder' : formatBytes(node.size)}</span>
                     {node.refCount && node.refCount > 1 ? (
-                      <span className="text-[10px] font-sans bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded border border-emerald-200/50">
+                      <span className="text-[9.5px] font-sans bg-emerald-50 text-emerald-700 px-1 py-0.2 rounded border border-emerald-200/50">
                         CAS {node.refCount}x
                       </span>
                     ) : null}

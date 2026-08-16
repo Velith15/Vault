@@ -133,6 +133,18 @@ export class DatabaseService {
     return this.mapNode(row);
   }
 
+  public getNodeByHash(hash: string): VaultNode | null {
+    const row = this.db.prepare(`
+      SELECT n.*, o.ref_count 
+      FROM nodes n 
+      LEFT JOIN objects o ON n.object_hash = o.hash 
+      WHERE n.object_hash = ?
+      LIMIT 1
+    `).get(hash) as any;
+    if (!row) return null;
+    return this.mapNode(row);
+  }
+
   public getNodes(query: SearchQuery): VaultNode[] {
     let sql = `
       SELECT n.*, o.ref_count 

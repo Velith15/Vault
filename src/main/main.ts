@@ -246,9 +246,12 @@ function setupIpcHandlers() {
       throw new Error('File is too large for inline preview Data URL (>100MB)');
     }
     const buffer = await fs.promises.readFile(objPath);
-    // Find mime
+    
+    // Find matching node for exact mime or deduce from buffer/hash
+    const node = dbService.getNodeByHash(hash);
+    const mimeType = node?.mimeType || 'application/octet-stream';
     const base64 = buffer.toString('base64');
-    return `data:application/octet-stream;base64,${base64}`;
+    return `data:${mimeType};base64,${base64}`;
   });
 
   ipcMain.handle('vault:get-storage-metrics', async () => {
