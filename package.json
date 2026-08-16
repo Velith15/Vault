@@ -1,6 +1,6 @@
 {
   "name": "vault-desktop",
-  "version": "2.0.51",
+  "version": "0.2.51",
   "description": "Vault - Local-First Virtual Storage",
   "main": "dist/main/main/main.js",
   "scripts": {
@@ -26,6 +26,7 @@
     },
     "win": {
       "icon": "build/icon.ico",
+      "artifactName": "${productName}-${version}.${ext}",
       "target": [
         "nsis",
         "portable"
@@ -38,7 +39,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     }
   },
   "keywords": [

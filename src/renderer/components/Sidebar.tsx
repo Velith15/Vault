@@ -149,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ShieldCheck className="w-3 h-3 text-emerald-600" />
             <span>Encrypted / Local</span>
           </div>
-          <span className="font-mono text-[10px] tracking-tight">V.2.0.51</span>
+          <span className="font-mono text-[10px] tracking-tight">V.0.2.51</span>
         </div>
       </div>
     </aside>
