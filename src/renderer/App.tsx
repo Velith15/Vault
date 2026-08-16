@@ -502,6 +502,7 @@ export const App: React.FC = () => {
       {selectedNode && activeTab !== 'storage' && activeTab !== 'settings' && (
         <PreviewDrawer
           node={selectedNode}
+          ancestors={ancestors}
           onClose={() => setSelectedNode(null)}
           onExport={handleExportNode}
           onOpenWithDefault={handleOpenWithDefault}

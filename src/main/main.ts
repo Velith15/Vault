@@ -22,6 +22,34 @@ function getVaultDataDir(): string {
   return vaultDir;
 }
 
+function getAppIconPath(): string {
+  const isDev = process.env.NODE_ENV !== 'production' && !app.isPackaged;
+  const isWindows = process.platform === 'win32';
+  const iconExt = isWindows ? 'icon.ico' : 'icon.png';
+
+  const possiblePaths = isDev
+    ? [
+        path.join(app.getAppPath(), 'build', iconExt),
+        path.join(app.getAppPath(), 'build', 'icon.png'),
+        path.join(process.cwd(), 'build', iconExt),
+        path.join(process.cwd(), 'build', 'icon.png'),
+      ]
+    : [
+        path.join(process.resourcesPath, 'build', iconExt),
+        path.join(process.resourcesPath, 'build', 'icon.png'),
+        path.join(app.getAppPath(), 'build', iconExt),
+        path.join(app.getAppPath(), 'build', 'icon.png'),
+      ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  return path.join(app.getAppPath(), 'build', 'icon.png');
+}
+
 function createWindow() {
   const vaultDir = getVaultDataDir();
   const dbPath = path.join(vaultDir, 'metadata', 'vault.db');
@@ -37,13 +65,15 @@ function createWindow() {
     console.error('[Vault Startup] Integrity Check Error:', err);
   });
 
+  const iconPath = getAppIconPath();
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: 'Vault',
-    icon: path.join(__dirname, '../../build/icon.png'),
+    icon: iconPath,
     backgroundColor: '#FAFAFA',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
@@ -54,6 +84,10 @@ function createWindow() {
       webSecurity: true,
     },
   });
+
+  if (iconPath && fs.existsSync(iconPath)) {
+    mainWindow.setIcon(iconPath);
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
