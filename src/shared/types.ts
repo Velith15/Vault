@@ -76,3 +76,41 @@ export interface ImportResult {
   successful: Array<{ id: string; name: string; size: number; isDuplicate: boolean; hash: string }>;
   failed: Array<{ name: string; error: string }>;
 }
+
+export type UpdateStatus = 
+  | 'idle' 
+  | 'checking' 
+  | 'available' 
+  | 'not-available' 
+  | 'downloading' 
+  | 'downloaded' 
+  | 'error' 
+  | 'offline';
+
+export interface UpdateInfo {
+  version: string;
+  releaseDate?: string;
+  releaseNotes?: string | Array<{ version: string; note: string }>;
+  files?: Array<{ url: string; sha512: string; size?: number }>;
+  path?: string;
+  sha512?: string;
+}
+
+export interface UpdateProgress {
+  bytesPerSecond: number;
+  percent: number;
+  transferred: number;
+  total: number;
+}
+
+export interface UpdateState {
+  status: UpdateStatus;
+  currentVersion: string;
+  updateInfo?: UpdateInfo | null;
+  progress?: UpdateProgress | null;
+  error?: string | null;
+  lastCheckedAt?: string | null;
+  dismissedVersion?: string | null;
+  isManualCheck?: boolean;
+}
+

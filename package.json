@@ -31,6 +31,11 @@
         "portable"
       ]
     },
+    "publish": {
+      "provider": "github",
+      "owner": "Velith15",
+      "repo": "Vault"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
@@ -48,6 +53,7 @@
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.3.9",
     "lucide-react": "^1.16.0",
     "mime-types": "^2.1.35",
     "tailwind-merge": "^3.0.1"

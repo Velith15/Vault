@@ -5,7 +5,8 @@ import { FileList } from './components/FileList';
 import { PreviewDrawer } from './components/PreviewDrawer';
 import { StoragePage } from './components/StoragePage';
 import { SettingsPage } from './components/SettingsPage';
-import { VaultNode, StorageMetrics, SearchQuery } from '@shared/types';
+import { UpdateModal } from './components/UpdateModal';
+import { VaultNode, StorageMetrics, SearchQuery, UpdateState } from '@shared/types';
 import { api } from './services/api';
 
 export const App: React.FC = () => {
@@ -22,6 +23,34 @@ export const App: React.FC = () => {
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modifiedAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // Update State
+  const [updateState, setUpdateState] = useState<UpdateState | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (api?.getUpdateState) {
+      api.getUpdateState().then((st) => {
+        setUpdateState(st);
+        if (st.status === 'available' && st.updateInfo?.version && st.updateInfo.version !== st.dismissedVersion) {
+          setShowUpdateModal(true);
+        }
+      }).catch(() => {});
+    }
+    if (api?.onUpdateStateChange) {
+      const unsubscribe = api.onUpdateStateChange((st) => {
+        setUpdateState(st);
+        if (st.status === 'available' && st.updateInfo?.version && st.updateInfo.version !== st.dismissedVersion) {
+          setShowUpdateModal(true);
+        } else if (st.status === 'downloaded') {
+          setShowUpdateModal(true);
+        } else if (st.isManualCheck && (st.status === 'not-available' || st.status === 'offline' || st.status === 'error')) {
+          // Keep modal open or let user see status in Settings
+        }
+      });
+      return unsubscribe;
+    }
+  }, []);
 
   // Load metrics
   const fetchMetrics = useCallback(async () => {
@@ -92,6 +121,33 @@ export const App: React.FC = () => {
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [targetRenameNode, setTargetRenameNode] = useState<VaultNode | null>(null);
   const [renameInput, setRenameInput] = useState('');
+
+  // Update Actions
+  const handleCheckForUpdates = async () => {
+    if (!api?.checkForUpdates) return;
+    const st = await api.checkForUpdates(true);
+    setUpdateState(st);
+    if (st.status === 'available') {
+      setShowUpdateModal(true);
+    }
+  };
+
+  const handleStartDownload = async () => {
+    if (!api?.downloadUpdate) return;
+    await api.downloadUpdate();
+  };
+
+  const handleRestartInstall = async () => {
+    if (!api?.installUpdate) return;
+    await api.installUpdate();
+  };
+
+  const handleDismissUpdate = async (version: string) => {
+    if (api?.dismissUpdate) {
+      await api.dismissUpdate(version);
+    }
+    setShowUpdateModal(false);
+  };
 
   // Actions
   const handleOpenCreateFolderModal = () => {
@@ -315,7 +371,14 @@ export const App: React.FC = () => {
           {activeTab === 'storage' ? (
             <StoragePage metrics={metrics} onRefreshMetrics={fetchMetrics} />
           ) : activeTab === 'settings' ? (
-            <SettingsPage onRefresh={() => { fetchNodes(); fetchMetrics(); }} />
+            <SettingsPage 
+              onRefresh={() => { fetchNodes(); fetchMetrics(); }} 
+              updateState={updateState}
+              onCheckForUpdates={handleCheckForUpdates}
+              onOpenUpdateModal={() => setShowUpdateModal(true)}
+              onStartDownload={handleStartDownload}
+              onRestartInstall={handleRestartInstall}
+            />
           ) : (
             <FileList
               nodes={nodes}
@@ -421,6 +484,16 @@ export const App: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      {/* Update Modal */}
+      {showUpdateModal && updateState && (
+        <UpdateModal
+          updateState={updateState}
+          onClose={() => setShowUpdateModal(false)}
+          onUpdateNow={handleStartDownload}
+          onRestartInstall={handleRestartInstall}
+          onDismiss={handleDismissUpdate}
+        />
       )}
     </div>
   );

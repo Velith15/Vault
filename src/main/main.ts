@@ -4,12 +4,14 @@ import fs from 'fs';
 import { DatabaseService } from './services/database/DatabaseService';
 import { StorageEngine } from './services/storage/StorageEngine';
 import { StorageMetricsService } from './services/metrics/StorageMetricsService';
+import { UpdateService } from './services/update/UpdateService';
 import { SearchQuery } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let dbService: DatabaseService;
 let storageEngine: StorageEngine;
 let metricsService: StorageMetricsService;
+let updateService: UpdateService;
 
 const isDev = process.env.NODE_ENV !== 'production' && !app.isPackaged;
 
@@ -61,7 +63,16 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    if (updateService) updateService.setMainWindow(null);
   });
+
+  if (updateService) {
+    updateService.setMainWindow(mainWindow);
+    // Non-blocking auto-check for updates on app launch
+    updateService.checkForUpdates(false).catch((err) => {
+      console.error('[Vault Startup] Auto update check error:', err);
+    });
+  }
 }
 
 // Setup IPC Handlers
@@ -204,9 +215,35 @@ function setupIpcHandlers() {
   ipcMain.handle('vault:run-integrity-check', async () => {
     return storageEngine.runIntegrityCheck();
   });
+
+  // Update handlers
+  ipcMain.handle('vault:get-update-state', async () => {
+    return updateService.getState();
+  });
+
+  ipcMain.handle('vault:check-for-updates', async (_, manual?: boolean) => {
+    return updateService.checkForUpdates(manual);
+  });
+
+  ipcMain.handle('vault:download-update', async () => {
+    return updateService.downloadUpdate();
+  });
+
+  ipcMain.handle('vault:install-update', async () => {
+    return updateService.installUpdate();
+  });
+
+  ipcMain.handle('vault:dismiss-update', async (_, version: string) => {
+    return updateService.dismissUpdate(version);
+  });
+
+  ipcMain.handle('vault:get-app-version', async () => {
+    return updateService.getCurrentVersion();
+  });
 }
 
 app.whenReady().then(() => {
+  updateService = new UpdateService();
   setupIpcHandlers();
   createWindow();
 

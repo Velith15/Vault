@@ -1,4 +1,4 @@
-import { VaultNode, StorageMetrics, SearchQuery, FilePreviewData, IntegrityReport } from '@shared/types';
+import { VaultNode, StorageMetrics, SearchQuery, FilePreviewData, IntegrityReport, UpdateState } from '@shared/types';
 
 declare global {
   interface Window {
@@ -22,6 +22,15 @@ declare global {
       getObjectBlobUrl: (hash: string) => Promise<string>;
       getStorageMetrics: () => Promise<StorageMetrics>;
       runIntegrityCheck: () => Promise<IntegrityReport>;
+
+      // Updates
+      getUpdateState: () => Promise<UpdateState>;
+      checkForUpdates: (manual?: boolean) => Promise<UpdateState>;
+      downloadUpdate: () => Promise<void>;
+      installUpdate: () => Promise<void>;
+      dismissUpdate: (version: string) => Promise<void>;
+      getAppVersion: () => Promise<string>;
+      onUpdateStateChange: (callback: (state: UpdateState) => void) => () => void;
     };
   }
 }

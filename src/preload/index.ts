@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { SearchQuery, VaultNode, StorageMetrics, FilePreviewData, IntegrityReport } from '../shared/types';
+import { SearchQuery, VaultNode, StorageMetrics, FilePreviewData, IntegrityReport, UpdateState } from '../shared/types';
 
 export const vaultApi = {
   // Nodes
@@ -26,6 +26,22 @@ export const vaultApi = {
   getObjectBlobUrl: (hash: string): Promise<string> => ipcRenderer.invoke('vault:get-object-data-url', hash),
   getStorageMetrics: (): Promise<StorageMetrics> => ipcRenderer.invoke('vault:get-storage-metrics'),
   runIntegrityCheck: (): Promise<IntegrityReport> => ipcRenderer.invoke('vault:run-integrity-check'),
+
+  // Automatic Updates
+  getUpdateState: (): Promise<UpdateState> => ipcRenderer.invoke('vault:get-update-state'),
+  checkForUpdates: (manual?: boolean): Promise<UpdateState> => ipcRenderer.invoke('vault:check-for-updates', manual),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('vault:download-update'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('vault:install-update'),
+  dismissUpdate: (version: string): Promise<void> => ipcRenderer.invoke('vault:dismiss-update', version),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('vault:get-app-version'),
+  onUpdateStateChange: (callback: (state: UpdateState) => void) => {
+    const subscription = (_: any, state: UpdateState) => callback(state);
+    ipcRenderer.on('vault:update-state-changed', subscription);
+    return () => {
+      ipcRenderer.removeListener('vault:update-state-changed', subscription);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('vaultApi', vaultApi);
+
