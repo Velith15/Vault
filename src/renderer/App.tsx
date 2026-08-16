@@ -278,6 +278,61 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleTrashMultiple = async (targetNodes: VaultNode[]) => {
+    try {
+      await Promise.all(targetNodes.map(n => api.trashNode(n.id, true)));
+      if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
+      fetchNodes();
+      fetchMetrics();
+    } catch (err: any) {
+      alert(`Failed to trash items: ${err.message}`);
+    }
+  };
+
+  const handleRestoreMultiple = async (targetNodes: VaultNode[]) => {
+    try {
+      await Promise.all(targetNodes.map(n => api.trashNode(n.id, false)));
+      if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
+      fetchNodes();
+      fetchMetrics();
+    } catch (err: any) {
+      alert(`Failed to restore items: ${err.message}`);
+    }
+  };
+
+  const handleDeletePermanentMultiple = async (targetNodes: VaultNode[]) => {
+    if (!window.confirm(`Permanently shred ${targetNodes.length} items from Vault? This cannot be undone.`)) return;
+    try {
+      await Promise.all(targetNodes.map(n => api.deletePermanently(n.id)));
+      if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
+      fetchNodes();
+      fetchMetrics();
+    } catch (err: any) {
+      alert(`Failed to delete items: ${err.message}`);
+    }
+  };
+
+  const handleExportMultiple = async (targetNodes: VaultNode[]) => {
+    for (const node of targetNodes) {
+      if (node.type === 'file') {
+        try {
+          await api.exportFile(node.id);
+        } catch (err: any) {
+          console.error(`Export error for ${node.name}:`, err);
+        }
+      }
+    }
+  };
+
+  const handleToggleStarMultiple = async (targetNodes: VaultNode[]) => {
+    try {
+      await Promise.all(targetNodes.map(n => api.toggleStarred(n.id)));
+      fetchNodes();
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
   // Drag & Drop Ingestion
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -420,6 +475,11 @@ export const App: React.FC = () => {
               onDeletePermanent={handleDeletePermanent}
               onExportNode={handleExportNode}
               onOpenWithDefault={handleOpenWithDefault}
+              onTrashMultiple={handleTrashMultiple}
+              onRestoreMultiple={handleRestoreMultiple}
+              onDeletePermanentMultiple={handleDeletePermanentMultiple}
+              onExportMultiple={handleExportMultiple}
+              onToggleStarMultiple={handleToggleStarMultiple}
               isTrashView={activeTab === 'trash'}
             />
           )}

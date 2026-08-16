@@ -1,6 +1,6 @@
 {
   "name": "vault-desktop",
-  "version": "0.2.48",
+  "version": "0.2.49",
   "description": "Vault - Local-First Virtual Storage",
   "main": "dist/main/main/main.js",
   "scripts": {
