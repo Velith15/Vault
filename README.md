@@ -56,19 +56,4 @@ Managed Vault Data Directory:
 
 ---
 
-## 3. Running & Development
 
-### Automated Tests
-```bash
-npm test
-```
-
-### Build Production Bundle
-```bash
-npm run build
-```
-
-### Launch Desktop Application
-```bash
-npm run dev
-```
