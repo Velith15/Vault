@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { DatabaseService } from './services/database/DatabaseService';
@@ -76,6 +76,7 @@ function createWindow() {
     icon: iconPath,
     backgroundColor: '#FAFAFA',
     titleBarStyle: 'hiddenInset',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -84,6 +85,10 @@ function createWindow() {
       webSecurity: true,
     },
   });
+
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.setMenu(null);
+  Menu.setApplicationMenu(null);
 
   if (iconPath && fs.existsSync(iconPath)) {
     mainWindow.setIcon(iconPath);
