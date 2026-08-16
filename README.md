@@ -52,18 +52,28 @@
 
 ---
 
-## 🚀 Getting Started
+## 📦 Installation & Download
 
-### Download Pre-built Executables
-Download the latest installer or portable executable directly from the [GitHub Releases](https://github.com/Velith15/Vault/releases) page.
+The easiest way to use Vault is to download the latest pre-built binaries from the [GitHub Releases Page](https://github.com/Velith15/Vault/releases/latest).
 
-### Building from Source
+| Build Type | File Name | Description | Download Link |
+| :--- | :--- | :--- | :--- |
+| **Windows Installer** | `Vault Setup 0.2.50.exe` | Standard Windows NSIS setup installer with auto-update support | [📥 Download Setup](https://github.com/Velith15/Vault/releases/download/v0.2.50/Vault-Setup-0.2.50.exe) |
+| **Portable Build** | `Vault 0.2.50.exe` | Standalone portable executable (no installation required) | [📥 Download Portable](https://github.com/Velith15/Vault/releases/download/v0.2.50/Vault.0.2.50.exe) |
 
-#### Prerequisites
+> 💡 **Auto-Updates**: Once installed, Vault automatically checks for new releases on startup and notifies you directly within the app settings.
+
+---
+
+## 🛠️ Building from Source
+
+If you prefer to build Vault manually from source:
+
+### Prerequisites
 - [Node.js](https://nodejs.org/) (v18 or higher)
 - [npm](https://www.npmjs.com/)
 
-#### Installation & Setup
+### Build Commands
 
 1. **Clone the Repository**:
    ```bash
@@ -76,17 +86,17 @@ Download the latest installer or portable executable directly from the [GitHub R
    npm install
    ```
 
-3. **Start Development Server**:
+3. **Start Development Mode**:
    ```bash
    npm run dev
    ```
 
-4. **Compile & Build Production Bundle**:
+4. **Compile Production Bundle**:
    ```bash
    npm run build
    ```
 
-5. **Package Executables for Windows / Distribution**:
+5. **Package Executables**:
    ```bash
    npm run dist
    ```
