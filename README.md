@@ -58,8 +58,8 @@ The easiest way to use Vault is to download the latest pre-built binaries from t
 
 | Build Type | File Name | Description | Download Link |
 | :--- | :--- | :--- | :--- |
-| **Windows Installer** | `Vault Setup 0.2.50.exe` | Standard Windows NSIS setup installer with auto-update support | [📥 Download Setup](https://github.com/Velith15/Vault/releases/download/v0.2.50/Vault-Setup-0.2.50.exe) |
-| **Portable Build** | `Vault 0.2.50.exe` | Standalone portable executable (no installation required) | [📥 Download Portable](https://github.com/Velith15/Vault/releases/download/v0.2.50/Vault.0.2.50.exe) |
+| **Windows Installer** | `Vault Setup 0.2.511.exe` | Standard Windows NSIS setup installer with auto-update support | [📥 Download Setup](https://github.com/Velith15/Vault/releases/download/v0.2.511/Vault-Setup-0.2.511.exe) |
+| **Portable Build** | `Vault 0.2.511.exe` | Standalone portable executable (no installation required) | [📥 Download Portable](https://github.com/Velith15/Vault/releases/download/v0.2.511/Vault.0.2.511.exe) |
 
 > 💡 **Auto-Updates**: Once installed, Vault automatically checks for new releases on startup and notifies you directly within the app settings.
 
