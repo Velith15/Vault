@@ -126,6 +126,29 @@ If you prefer to build Vault manually from source:
 - **Bundler & Packaging**: [electron-builder](https://www.electron.build/)
 
 ---
+## 🛣️ Roadmap
+
+Vault is actively being developed. The following features are planned for upcoming releases.
+
+**Upcoming**
+
+- Improved Compression — Better compression performance and storage efficiency.
+- Storage Optimization — More efficient use of available local storage.
+- File Management — Improvements to organizing, managing, and interacting with files.
+- Storage Analytics — More detailed insights into storage usage and saved space.
+- Performance — Faster operations and improved overall application responsiveness.
+- UI/UX Improvements — Refinements to the interface and user experience.
+- Stability — Bug fixes, reliability improvements, and general maintenance.
+
+**Future**
+
+- External Storage Support — Better integration with external drives and storage devices.
+- Advanced Backup & Recovery — More robust options for protecting and recovering data.
+- Cloud Storage & Sync — Cloud-backed storage and synchronization between devices.
+
+«Note: The roadmap is subject to change as Vault evolves.»
+
+---
 
 ## 📜 License
 
