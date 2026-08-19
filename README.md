@@ -146,8 +146,9 @@ Vault is actively being developed. The following features are planned for upcomi
 - Advanced Backup & Recovery — More robust options for protecting and recovering data.
 - Cloud Storage & Sync — Cloud-backed storage and synchronization between devices.
 
+```
 «Note: The roadmap is subject to change as Vault evolves.»
-
+```
 ---
 
 ## 📜 License
