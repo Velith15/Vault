@@ -35,7 +35,7 @@ export const App: React.FC = () => {
 
   // Filtering & View state
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modifiedAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isDraggingOver, setIsDraggingOver] = useState(false);
