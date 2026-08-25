@@ -198,8 +198,8 @@ export class DatabaseService {
       autoCompression: true,
       mode: 'automatic',
       profile: 'BALANCED',
-      minSavingsThresholdPercent: 5,
-      minFileSizeToCompress: 1024,
+      minSavingsThresholdPercent: 0,
+      minFileSizeToCompress: 0,
       backgroundCpuLimitPercent: 50,
     };
 

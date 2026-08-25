@@ -99,34 +99,31 @@ export class StorageEngine {
         await fs.promises.mkdir(targetDir, { recursive: true });
       }
 
-      // Check compression settings & suitability
+      // Check compression settings & suitability: compress all incoming files by default
       const settings = this.dbService.getCompressionSettings();
       let dataToWrite: Uint8Array = sourceBuffer;
       let isCompressed = false;
       let compressedSize = finalSize;
       let compressionAlgo: string | null = null;
 
-      if (settings.autoCompression && settings.mode !== 'off' && finalSize >= settings.minFileSizeToCompress) {
-        const analysis = FileAnalyzer.analyzeFile(originalName, mimeType, finalSize);
-        if (analysis.isRecommendedForCompression || settings.mode === 'maximum_savings') {
-          const profile: CompressionProfile = settings.mode === 'maximum_savings' 
-            ? 'MAXIMUM' 
-            : settings.mode === 'performance' 
-              ? 'FAST' 
-              : settings.profile;
+      if (settings.autoCompression && settings.mode !== 'off' && finalSize > 0) {
+        const profile: CompressionProfile = settings.mode === 'maximum_savings' 
+          ? 'MAXIMUM' 
+          : settings.mode === 'performance' 
+            ? 'FAST' 
+            : settings.profile || 'BALANCED';
 
-          const compResult = await CompressionEngine.compressLossless(
-            sourceBuffer, 
-            profile, 
-            settings.minSavingsThresholdPercent
-          );
+        const compResult = await CompressionEngine.compressLossless(
+          sourceBuffer, 
+          profile, 
+          0 // Compress and keep whenever it yields any savings (savingsBytes > 0)
+        );
 
-          if (compResult.isCompressed) {
-            dataToWrite = compResult.compressedData;
-            isCompressed = true;
-            compressedSize = compResult.compressedSize;
-            compressionAlgo = compResult.algorithm;
-          }
+        if (compResult.isCompressed) {
+          dataToWrite = compResult.compressedData;
+          isCompressed = true;
+          compressedSize = compResult.compressedSize;
+          compressionAlgo = compResult.algorithm;
         }
       }
 
@@ -196,27 +193,24 @@ export class StorageEngine {
       let compressedSize = buffer.length;
       let compressionAlgo: string | null = null;
 
-      if (settings.autoCompression && settings.mode !== 'off' && buffer.length >= settings.minFileSizeToCompress) {
-        const analysis = FileAnalyzer.analyzeFile(originalName, mimeType, buffer.length);
-        if (analysis.isRecommendedForCompression || settings.mode === 'maximum_savings') {
-          const profile: CompressionProfile = settings.mode === 'maximum_savings' 
-            ? 'MAXIMUM' 
-            : settings.mode === 'performance' 
-              ? 'FAST' 
-              : settings.profile;
+      if (settings.autoCompression && settings.mode !== 'off' && buffer.length > 0) {
+        const profile: CompressionProfile = settings.mode === 'maximum_savings' 
+          ? 'MAXIMUM' 
+          : settings.mode === 'performance' 
+            ? 'FAST' 
+            : settings.profile || 'BALANCED';
 
-          const compResult = await CompressionEngine.compressLossless(
-            buffer, 
-            profile, 
-            settings.minSavingsThresholdPercent
-          );
+        const compResult = await CompressionEngine.compressLossless(
+          buffer, 
+          profile, 
+          0
+        );
 
-          if (compResult.isCompressed) {
-            dataToWrite = compResult.compressedData;
-            isCompressed = true;
-            compressedSize = compResult.compressedSize;
-            compressionAlgo = compResult.algorithm;
-          }
+        if (compResult.isCompressed) {
+          dataToWrite = compResult.compressedData;
+          isCompressed = true;
+          compressedSize = compResult.compressedSize;
+          compressionAlgo = compResult.algorithm;
         }
       }
 
