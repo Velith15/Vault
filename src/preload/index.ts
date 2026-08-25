@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { SearchQuery, VaultNode, StorageMetrics, FilePreviewData, IntegrityReport, UpdateState } from '../shared/types';
+import { 
+  SearchQuery, 
+  VaultNode, 
+  StorageMetrics, 
+  FilePreviewData, 
+  IntegrityReport, 
+  UpdateState,
+  CompressionSettings,
+  OptimizationAnalysis,
+  OptimizationProgress,
+  CompressionProfile
+} from '../shared/types';
 
 export const vaultApi = {
   // Nodes
@@ -20,12 +31,30 @@ export const vaultApi = {
   importBuffer: (buffer: Uint8Array, name: string, parentFolderId?: string | null): Promise<VaultNode> => ipcRenderer.invoke('vault:import-buffer', buffer, name, parentFolderId),
   exportFile: (nodeId: string): Promise<string> => ipcRenderer.invoke('vault:export-file', nodeId),
   openWithDefaultApp: (nodeId: string): Promise<void> => ipcRenderer.invoke('vault:open-with-default-app', nodeId),
+  startDrag: (nodeId: string): void => ipcRenderer.send('vault:start-drag', nodeId),
 
   // Previews & Metrics
   getFilePreview: (nodeId: string): Promise<FilePreviewData> => ipcRenderer.invoke('vault:get-file-preview', nodeId),
   getObjectBlobUrl: (hash: string): Promise<string> => ipcRenderer.invoke('vault:get-object-data-url', hash),
   getStorageMetrics: (): Promise<StorageMetrics> => ipcRenderer.invoke('vault:get-storage-metrics'),
   runIntegrityCheck: (): Promise<IntegrityReport> => ipcRenderer.invoke('vault:run-integrity-check'),
+
+  // Intelligent Storage Optimization
+  getCompressionSettings: (): Promise<CompressionSettings> => ipcRenderer.invoke('vault:get-compression-settings'),
+  setCompressionSettings: (settings: Partial<CompressionSettings>): Promise<CompressionSettings> => ipcRenderer.invoke('vault:set-compression-settings', settings),
+  analyzeOptimization: (): Promise<OptimizationAnalysis> => ipcRenderer.invoke('vault:analyze-optimization'),
+  startOptimization: (profile?: CompressionProfile): Promise<OptimizationProgress> => ipcRenderer.invoke('vault:start-optimization', profile),
+  pauseOptimization: (): Promise<OptimizationProgress> => ipcRenderer.invoke('vault:pause-optimization'),
+  resumeOptimization: (): Promise<OptimizationProgress> => ipcRenderer.invoke('vault:resume-optimization'),
+  cancelOptimization: (): Promise<OptimizationProgress> => ipcRenderer.invoke('vault:cancel-optimization'),
+  getOptimizationProgress: (): Promise<OptimizationProgress> => ipcRenderer.invoke('vault:get-optimization-progress'),
+  onOptimizationProgressChange: (callback: (progress: OptimizationProgress) => void) => {
+    const subscription = (_: any, progress: OptimizationProgress) => callback(progress);
+    ipcRenderer.on('vault:optimization-progress-changed', subscription);
+    return () => {
+      ipcRenderer.removeListener('vault:optimization-progress-changed', subscription);
+    };
+  },
 
   // Automatic Updates
   getUpdateState: (): Promise<UpdateState> => ipcRenderer.invoke('vault:get-update-state'),
@@ -44,4 +73,3 @@ export const vaultApi = {
 };
 
 contextBridge.exposeInMainWorld('vaultApi', vaultApi);
-

@@ -1,22 +1,23 @@
-import { app, BrowserWindow, Menu, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, shell, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { DatabaseService } from './services/database/DatabaseService';
 import { StorageEngine } from './services/storage/StorageEngine';
+import { OptimizationQueue } from './services/storage/OptimizationQueue';
 import { StorageMetricsService } from './services/metrics/StorageMetricsService';
 import { UpdateService } from './services/update/UpdateService';
-import { SearchQuery } from '../shared/types';
+import { SearchQuery, CompressionProfile, CompressionSettings } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let dbService: DatabaseService;
 let storageEngine: StorageEngine;
+let optimizationQueue: OptimizationQueue;
 let metricsService: StorageMetricsService;
 let updateService: UpdateService;
 
 const isDev = process.env.NODE_ENV !== 'production' && !app.isPackaged;
 
 function getVaultDataDir(): string {
-  // Vault data directory inside user app data or local folder
   const userData = app.getPath('userData');
   const vaultDir = path.join(userData, 'vault_data');
   return vaultDir;
@@ -56,11 +57,20 @@ function createWindow() {
 
   dbService = new DatabaseService(dbPath);
   storageEngine = new StorageEngine(vaultDir, dbService);
+  optimizationQueue = new OptimizationQueue(storageEngine, dbService);
   metricsService = new StorageMetricsService(vaultDir, dbService);
 
-  // Run startup integrity check & cleanup
-  storageEngine.runIntegrityCheck().then((report) => {
+  // Hook up optimization queue events to IPC
+  optimizationQueue.on('progress', (progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vault:optimization-progress-changed', progress);
+    }
+  });
+
+  // Run startup integrity check & 7-day trash auto-purge
+  storageEngine.runIntegrityCheck().then(async (report) => {
     console.log('[Vault Startup] Integrity Report:', report);
+    await storageEngine.purgeExpiredTrash(7);
   }).catch((err) => {
     console.error('[Vault Startup] Integrity Check Error:', err);
   });
@@ -107,7 +117,6 @@ function createWindow() {
 
   if (updateService) {
     updateService.setMainWindow(mainWindow);
-    // Non-blocking auto-check for updates on app launch
     updateService.checkForUpdates(false).catch((err) => {
       console.error('[Vault Startup] Auto update check error:', err);
     });
@@ -216,20 +225,52 @@ function setupIpcHandlers() {
       return null;
     }
 
-    const objPath = storageEngine.getObjectPath(node.objectHash!);
-    await fs.promises.copyFile(objPath, result.filePath);
-    return result.filePath;
+    return storageEngine.exportFile(nodeId, path.dirname(result.filePath));
   });
 
   ipcMain.handle('vault:open-with-default-app', async (_, nodeId: string) => {
     const node = dbService.getNodeById(nodeId);
     if (!node || !node.objectHash) throw new Error('File not found');
 
-    // Create a temporary readable copy with original filename to open seamlessly with system app
     const tempExportPath = path.join(app.getPath('temp'), `vault_view_${Date.now()}_${node.name}`);
-    const objPath = storageEngine.getObjectPath(node.objectHash);
-    await fs.promises.copyFile(objPath, tempExportPath);
+    const decompressed = await storageEngine.getObjectBuffer(node.objectHash);
+    await fs.promises.writeFile(tempExportPath, decompressed);
     await shell.openPath(tempExportPath);
+  });
+
+  ipcMain.on('vault:start-drag', async (event, nodeId: string) => {
+    try {
+      const node = dbService.getNodeById(nodeId);
+      const { filePath } = await storageEngine.prepareDragOut(nodeId);
+      
+      let dragIcon = nativeImage.createEmpty();
+      
+      // If file is an image and under 20MB, try to generate a thumbnail icon for the drag preview
+      if (node && node.mimeType?.startsWith('image/') && node.size < 20 * 1024 * 1024) {
+        try {
+          const img = nativeImage.createFromPath(filePath);
+          if (!img.isEmpty()) {
+            dragIcon = img.resize({ width: 48, height: 48 });
+          }
+        } catch {}
+      }
+
+      // If no image thumbnail, use resized application icon (32x32 minimal size)
+      if (dragIcon.isEmpty()) {
+        const iconPath = getAppIconPath();
+        if (iconPath && fs.existsSync(iconPath)) {
+          const rawAppIcon = nativeImage.createFromPath(iconPath);
+          dragIcon = rawAppIcon.resize({ width: 32, height: 32 });
+        }
+      }
+
+      event.sender.startDrag({
+        file: filePath,
+        icon: dragIcon
+      });
+    } catch (err) {
+      console.error('[Vault DragOut] Failed to start native drag:', err);
+    }
   });
 
   ipcMain.handle('vault:get-file-preview', async (_, nodeId: string) => {
@@ -237,20 +278,13 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('vault:get-object-data-url', async (_, hash: string) => {
-    const objPath = storageEngine.getObjectPath(hash);
-    if (!fs.existsSync(objPath)) {
-      throw new Error('Object not found');
-    }
-    const stat = await fs.promises.stat(objPath);
-    if (stat.size > 100 * 1024 * 1024) {
+    const decompressed = await storageEngine.getObjectBuffer(hash);
+    if (decompressed.length > 100 * 1024 * 1024) {
       throw new Error('File is too large for inline preview Data URL (>100MB)');
     }
-    const buffer = await fs.promises.readFile(objPath);
-    
-    // Find matching node for exact mime or deduce from buffer/hash
     const node = dbService.getNodeByHash(hash);
     const mimeType = node?.mimeType || 'application/octet-stream';
-    const base64 = buffer.toString('base64');
+    const base64 = decompressed.toString('base64');
     return `data:${mimeType};base64,${base64}`;
   });
 
@@ -260,6 +294,42 @@ function setupIpcHandlers() {
 
   ipcMain.handle('vault:run-integrity-check', async () => {
     return storageEngine.runIntegrityCheck();
+  });
+
+  // Storage Optimization IPC Handlers
+  ipcMain.handle('vault:get-compression-settings', async () => {
+    return dbService.getCompressionSettings();
+  });
+
+  ipcMain.handle('vault:set-compression-settings', async (_, settings: Partial<CompressionSettings>) => {
+    return dbService.setCompressionSettings(settings);
+  });
+
+  ipcMain.handle('vault:analyze-optimization', async () => {
+    return storageEngine.analyzeStorageOptimization();
+  });
+
+  ipcMain.handle('vault:start-optimization', async (_, profile?: CompressionProfile) => {
+    return optimizationQueue.startOptimization(profile);
+  });
+
+  ipcMain.handle('vault:pause-optimization', async () => {
+    optimizationQueue.pause();
+    return optimizationQueue.getProgress();
+  });
+
+  ipcMain.handle('vault:resume-optimization', async () => {
+    optimizationQueue.resume();
+    return optimizationQueue.getProgress();
+  });
+
+  ipcMain.handle('vault:cancel-optimization', async () => {
+    optimizationQueue.cancel();
+    return optimizationQueue.getProgress();
+  });
+
+  ipcMain.handle('vault:get-optimization-progress', async () => {
+    return optimizationQueue.getProgress();
   });
 
   // Update handlers

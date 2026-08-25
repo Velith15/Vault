@@ -1,4 +1,15 @@
-import { VaultNode, StorageMetrics, SearchQuery, FilePreviewData, IntegrityReport, UpdateState } from '@shared/types';
+import { 
+  VaultNode, 
+  StorageMetrics, 
+  SearchQuery, 
+  FilePreviewData, 
+  IntegrityReport, 
+  UpdateState,
+  CompressionSettings,
+  OptimizationAnalysis,
+  OptimizationProgress,
+  CompressionProfile
+} from '@shared/types';
 
 declare global {
   interface Window {
@@ -18,10 +29,22 @@ declare global {
       importBuffer: (buffer: Uint8Array, name: string, parentFolderId?: string | null) => Promise<VaultNode>;
       exportFile: (nodeId: string) => Promise<string | null>;
       openWithDefaultApp: (nodeId: string) => Promise<void>;
+      startDrag: (nodeId: string) => void;
       getFilePreview: (nodeId: string) => Promise<FilePreviewData>;
       getObjectBlobUrl: (hash: string) => Promise<string>;
       getStorageMetrics: () => Promise<StorageMetrics>;
       runIntegrityCheck: () => Promise<IntegrityReport>;
+
+      // Storage Optimization
+      getCompressionSettings: () => Promise<CompressionSettings>;
+      setCompressionSettings: (settings: Partial<CompressionSettings>) => Promise<CompressionSettings>;
+      analyzeOptimization: () => Promise<OptimizationAnalysis>;
+      startOptimization: (profile?: CompressionProfile) => Promise<OptimizationProgress>;
+      pauseOptimization: () => Promise<OptimizationProgress>;
+      resumeOptimization: () => Promise<OptimizationProgress>;
+      cancelOptimization: () => Promise<OptimizationProgress>;
+      getOptimizationProgress: () => Promise<OptimizationProgress>;
+      onOptimizationProgressChange: (callback: (progress: OptimizationProgress) => void) => () => void;
 
       // Updates
       getUpdateState: () => Promise<UpdateState>;

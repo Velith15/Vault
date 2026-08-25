@@ -1,21 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Folder, 
-  FileText, 
-  Image, 
-  Film, 
-  Music, 
-  Archive, 
-  Code, 
-  File, 
-  Star, 
-  MoreVertical, 
-  Download, 
-  Trash2, 
-  Edit2, 
-  ExternalLink, 
-  RotateCcw, 
+import {
+  Folder,
+  FileText,
+  Image,
+  Film,
+  Music,
+  Archive,
+  Code,
+  File,
+  Star,
+  MoreVertical,
+  Download,
+  Trash2,
+  Edit2,
+  ExternalLink,
+  RotateCcw,
   Sparkles,
+  Zap,
   Info,
   X
 } from 'lucide-react';
@@ -36,6 +37,7 @@ interface FileListProps {
   selectedNodeId: string | null;
   onSelectNode: (node: VaultNode) => void;
   onOpenNode: (node: VaultNode) => void;
+  onGetInfo?: (node: VaultNode) => void;
   onToggleStar: (node: VaultNode, e: React.MouseEvent) => void;
   onRenameNode: (node: VaultNode) => void;
   onTrashNode: (node: VaultNode) => void;
@@ -57,6 +59,7 @@ export const FileList: React.FC<FileListProps> = ({
   selectedNodeId,
   onSelectNode,
   onOpenNode,
+  onGetInfo,
   onToggleStar,
   onRenameNode,
   onTrashNode,
@@ -323,7 +326,7 @@ export const FileList: React.FC<FileListProps> = ({
         <div className="w-14 h-14 rounded-2xl bg-[#F4F4F5] border border-[#E4E4E7] flex items-center justify-center text-[#A1A1AA] mb-4 shadow-2xs">
           <Folder className="w-6 h-6 stroke-[1.5]" />
         </div>
-        <h3 className="font-serif text-[19px] italic font-normal text-[#09090B]">No files in this location</h3>
+        <h3 className="font-sans text-[17px] font-medium text-[#09090B]">No files in this location</h3>
         <p className="font-sans text-[13px] text-[#71717A] max-w-sm mt-1 leading-relaxed">
           Drag and drop files from your desktop to securely ingest them into Vault.
         </p>
@@ -366,6 +369,13 @@ export const FileList: React.FC<FileListProps> = ({
               <div
                 key={node.id}
                 data-node-id={node.id}
+                draggable={node.type === 'file'}
+                onDragStart={(e) => {
+                  if (node.type === 'file') {
+                    e.preventDefault();
+                    api.startDrag(node.id);
+                  }
+                }}
                 onClick={(e) => handleNodeClick(e, node, index)}
                 onDoubleClick={() => onOpenNode(node)}
                 onContextMenu={(e) => handleContextMenu(e, node)}
@@ -401,10 +411,20 @@ export const FileList: React.FC<FileListProps> = ({
                   <div className="font-sans text-[12.5px] font-medium text-[#09090B] truncate tracking-tight" title={node.name}>
                     {node.name}
                   </div>
-                  <div className="text-[11px] text-[#A1A1AA] flex items-center justify-between mt-0.5 font-mono">
-                    <span>{node.type === 'folder' ? 'Folder' : formatBytes(node.size)}</span>
-                    {node.refCount && node.refCount > 1 ? (
-                      <span className="text-[9.5px] font-sans bg-emerald-50 text-emerald-700 px-1 py-0.2 rounded border border-emerald-200/50">
+                  <div className="text-[11px] text-[#71717A] flex items-center justify-between mt-0.5 font-mono">
+                    <span>
+                      {node.type === 'folder' 
+                        ? 'Folder' 
+                        : node.isCompressed 
+                          ? formatBytes(node.compressedSize || node.size) 
+                          : formatBytes(node.size)}
+                    </span>
+                    {node.isCompressed && node.compressionRatio && node.compressionRatio > 1 ? (
+                      <span className="text-[9px] font-sans font-semibold bg-emerald-100/80 text-emerald-800 px-1 py-0.2 rounded border border-emerald-300/60" title={`Original: ${formatBytes(node.size)}`}>
+                        {node.compressionRatio}x zstd
+                      </span>
+                    ) : node.refCount && node.refCount > 1 ? (
+                      <span className="text-[9.5px] font-sans bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded border border-indigo-200/50">
                         CAS {node.refCount}x
                       </span>
                     ) : null}
@@ -421,7 +441,7 @@ export const FileList: React.FC<FileListProps> = ({
           <div className="sticky top-0 bg-[#FAFAFA]/95 backdrop-blur-xs border-b border-[#E4E4E7] grid grid-cols-12 px-5 py-2.5 font-sans font-medium text-[#71717A] text-[11px] uppercase tracking-wider z-10">
             <div className="col-span-6 flex items-center gap-2">Name</div>
             <div className="col-span-2">Type</div>
-            <div className="col-span-2">Size</div>
+            <div className="col-span-2">Size On Disk</div>
             <div className="col-span-2 text-right">Modified</div>
           </div>
 
@@ -434,6 +454,13 @@ export const FileList: React.FC<FileListProps> = ({
                 <div
                   key={node.id}
                   data-node-id={node.id}
+                  draggable={node.type === 'file'}
+                  onDragStart={(e) => {
+                    if (node.type === 'file') {
+                      e.preventDefault();
+                      api.startDrag(node.id);
+                    }
+                  }}
                   onClick={(e) => handleNodeClick(e, node, index)}
                   onDoubleClick={() => onOpenNode(node)}
                   onContextMenu={(e) => handleContextMenu(e, node)}
@@ -448,8 +475,15 @@ export const FileList: React.FC<FileListProps> = ({
                       {node.name}
                     </span>
 
+                    {node.isCompressed ? (
+                      <span className="flex-shrink-0 text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-mono" title={`Lossless Zstd Compressed (Original: ${formatBytes(node.size)})`}>
+                        <Zap className="w-2.5 h-2.5 text-amber-500" />
+                        <span>-{Math.round(((node.size - (node.compressedSize || node.size)) / node.size) * 100)}%</span>
+                      </span>
+                    ) : null}
+
                     {node.refCount && node.refCount > 1 ? (
-                      <span className="flex-shrink-0 text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-mono">
+                      <span className="flex-shrink-0 text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-mono">
                         <Sparkles className="w-2.5 h-2.5" />
                         <span>{node.refCount}x</span>
                       </span>
@@ -474,7 +508,16 @@ export const FileList: React.FC<FileListProps> = ({
 
                   {/* Size column */}
                   <div className="col-span-2 font-mono text-[12px] text-[#71717A]">
-                    {node.type === 'folder' ? '—' : formatBytes(node.size)}
+                    {node.type === 'folder' ? (
+                      '—'
+                    ) : node.isCompressed ? (
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-emerald-800">{formatBytes(node.compressedSize || node.size)}</span>
+                        <span className="text-[10px] text-[#A1A1AA] line-through">{formatBytes(node.size)}</span>
+                      </div>
+                    ) : (
+                      formatBytes(node.size)
+                    )}
                   </div>
 
                   {/* Date & Actions column */}
@@ -579,7 +622,7 @@ export const FileList: React.FC<FileListProps> = ({
         >
           {/* Header */}
           <div className="px-3 py-1.5 border-b border-[#E4E4E7]/70 mb-1">
-            <div className="font-serif italic text-[14px] text-[#09090B] truncate">
+            <div className="font-sans font-medium text-[13px] text-[#09090B] truncate">
               {contextMenu.isMulti ? `${selectedIds.size} Items Selected` : contextMenu.node.name}
             </div>
             <div className="text-[10px] text-[#A1A1AA] font-mono">
@@ -621,7 +664,7 @@ export const FileList: React.FC<FileListProps> = ({
                     className="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 transition-colors font-medium"
                   >
                     <Trash2 className="w-4 h-4" />
-                    <span>Delete {selectedIds.size} Items Permanently</span>
+                    <span>Move {selectedIds.size} Items to Trash</span>
                   </button>
                 )}
               </>
@@ -655,11 +698,15 @@ export const FileList: React.FC<FileListProps> = ({
             !isTrashView ? (
               <>
                 <button
-                  onClick={() => { onOpenNode(contextMenu.node); setContextMenu(null); }}
+                  onClick={() => { 
+                    if (onGetInfo) onGetInfo(contextMenu.node);
+                    else onOpenNode(contextMenu.node);
+                    setContextMenu(null); 
+                  }}
                   className="w-full text-left px-3 py-1.5 hover:bg-[#F4F4F5] flex items-center gap-2.5 text-[#09090B] transition-colors"
                 >
                   <Info className="w-4 h-4 text-[#71717A]" />
-                  <span>Get Info / Preview</span>
+                  <span>Get Info</span>
                 </button>
 
                 <button
@@ -695,7 +742,7 @@ export const FileList: React.FC<FileListProps> = ({
                   className="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 transition-colors font-medium"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Delete Permanently</span>
+                  <span>Move to Trash</span>
                 </button>
               </>
             ) : (

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { VaultNode, StorageObject, SearchQuery } from '../../../shared/types';
+import { VaultNode, StorageObject, SearchQuery, CompressionSettings, CategorySavings } from '../../../shared/types';
 
 export class DatabaseService {
   private db: Database.Database;
@@ -26,7 +26,10 @@ export class DatabaseService {
         size INTEGER NOT NULL,
         ref_count INTEGER NOT NULL DEFAULT 1,
         stored_at TEXT NOT NULL,
-        last_verified_at TEXT NOT NULL
+        last_verified_at TEXT NOT NULL,
+        is_compressed INTEGER NOT NULL DEFAULT 0,
+        compressed_size INTEGER NOT NULL DEFAULT 0,
+        compression_algo TEXT
       );
 
       CREATE TABLE IF NOT EXISTS nodes (
@@ -53,11 +56,38 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_nodes_hash ON nodes(object_hash);
       CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name COLLATE NOCASE);
 
+      CREATE TABLE IF NOT EXISTS storage_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS meta (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
     `);
+
+    // Run safe migrations for existing databases that lack new columns
+    this.runMigrations();
+  }
+
+  private runMigrations(): void {
+    try {
+      const columns = this.db.pragma('table_info(objects)') as Array<{ name: string }>;
+      const colNames = new Set(columns.map(c => c.name));
+
+      if (!colNames.has('is_compressed')) {
+        this.db.exec('ALTER TABLE objects ADD COLUMN is_compressed INTEGER NOT NULL DEFAULT 0;');
+      }
+      if (!colNames.has('compressed_size')) {
+        this.db.exec('ALTER TABLE objects ADD COLUMN compressed_size INTEGER NOT NULL DEFAULT 0;');
+      }
+      if (!colNames.has('compression_algo')) {
+        this.db.exec('ALTER TABLE objects ADD COLUMN compression_algo TEXT;');
+      }
+    } catch (err) {
+      console.error('[DatabaseService] Migration notice:', err);
+    }
   }
 
   public checkIntegrity(): boolean {
@@ -76,6 +106,9 @@ export class DatabaseService {
       refCount: row.ref_count,
       storedAt: row.stored_at,
       lastVerifiedAt: row.last_verified_at,
+      isCompressed: row.is_compressed === 1,
+      compressedSize: row.compressed_size || row.size,
+      compressionAlgo: row.compression_algo || null,
     };
   }
 
@@ -87,18 +120,56 @@ export class DatabaseService {
       refCount: row.ref_count,
       storedAt: row.stored_at,
       lastVerifiedAt: row.last_verified_at,
+      isCompressed: row.is_compressed === 1,
+      compressedSize: row.compressed_size || row.size,
+      compressionAlgo: row.compression_algo || null,
     }));
   }
 
-  public insertObject(hash: string, size: number): void {
+  public insertObject(
+    hash: string, 
+    size: number, 
+    isCompressed: boolean = false, 
+    compressedSize: number = 0, 
+    compressionAlgo: string | null = null
+  ): void {
     const now = new Date().toISOString();
+    const actualCompressedSize = isCompressed ? compressedSize : size;
+
     this.db.prepare(`
-      INSERT INTO objects (hash, size, ref_count, stored_at, last_verified_at)
-      VALUES (?, ?, 1, ?, ?)
+      INSERT INTO objects (hash, size, ref_count, stored_at, last_verified_at, is_compressed, compressed_size, compression_algo)
+      VALUES (?, ?, 1, ?, ?, ?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET
         ref_count = ref_count + 1,
         last_verified_at = excluded.last_verified_at
-    `).run(hash, size, now, now);
+    `).run(
+      hash, 
+      size, 
+      now, 
+      now, 
+      isCompressed ? 1 : 0, 
+      actualCompressedSize, 
+      compressionAlgo
+    );
+  }
+
+  public updateObjectCompression(
+    hash: string, 
+    isCompressed: boolean, 
+    compressedSize: number, 
+    compressionAlgo: string | null
+  ): void {
+    this.db.prepare(`
+      UPDATE objects 
+      SET is_compressed = ?, compressed_size = ?, compression_algo = ?, last_verified_at = ?
+      WHERE hash = ?
+    `).run(
+      isCompressed ? 1 : 0, 
+      compressedSize, 
+      compressionAlgo, 
+      new Date().toISOString(), 
+      hash
+    );
   }
 
   public incrementObjectRefCount(hash: string): void {
@@ -120,11 +191,44 @@ export class DatabaseService {
     this.db.prepare('UPDATE objects SET last_verified_at = ? WHERE hash = ?').run(new Date().toISOString(), hash);
   }
 
+  // --- Compression & Storage Settings ---
+
+  public getCompressionSettings(): CompressionSettings {
+    const defaults: CompressionSettings = {
+      autoCompression: true,
+      mode: 'automatic',
+      profile: 'BALANCED',
+      minSavingsThresholdPercent: 5,
+      minFileSizeToCompress: 1024,
+      backgroundCpuLimitPercent: 50,
+    };
+
+    try {
+      const row = this.db.prepare("SELECT value FROM storage_settings WHERE key = 'compression'").get() as any;
+      if (row && row.value) {
+        return { ...defaults, ...JSON.parse(row.value) };
+      }
+    } catch {}
+
+    return defaults;
+  }
+
+  public setCompressionSettings(settings: Partial<CompressionSettings>): CompressionSettings {
+    const current = this.getCompressionSettings();
+    const updated = { ...current, ...settings };
+    this.db.prepare(`
+      INSERT INTO storage_settings (key, value)
+      VALUES ('compression', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(JSON.stringify(updated));
+    return updated;
+  }
+
   // --- Logical Nodes Operations ---
 
   public getNodeById(id: string): VaultNode | null {
     const row = this.db.prepare(`
-      SELECT n.*, o.ref_count 
+      SELECT n.*, o.ref_count, o.is_compressed, o.compressed_size, o.compression_algo
       FROM nodes n 
       LEFT JOIN objects o ON n.object_hash = o.hash 
       WHERE n.id = ?
@@ -135,7 +239,7 @@ export class DatabaseService {
 
   public getNodeByHash(hash: string): VaultNode | null {
     const row = this.db.prepare(`
-      SELECT n.*, o.ref_count 
+      SELECT n.*, o.ref_count, o.is_compressed, o.compressed_size, o.compression_algo
       FROM nodes n 
       LEFT JOIN objects o ON n.object_hash = o.hash 
       WHERE n.object_hash = ?
@@ -147,7 +251,7 @@ export class DatabaseService {
 
   public getNodes(query: SearchQuery): VaultNode[] {
     let sql = `
-      SELECT n.*, o.ref_count 
+      SELECT n.*, o.ref_count, o.is_compressed, o.compressed_size, o.compression_algo
       FROM nodes n 
       LEFT JOIN objects o ON n.object_hash = o.hash 
       WHERE 1=1
@@ -196,11 +300,9 @@ export class DatabaseService {
       params.push(`%${query.term.trim()}%`);
     }
 
-    // Sort
     const sortField = query.sortBy || 'name';
     const sortOrder = query.sortOrder === 'desc' ? 'DESC' : 'ASC';
 
-    // In folder views, usually folders come first
     if (query.parentId !== undefined) {
       sql += ` ORDER BY CASE WHEN n.type = 'folder' THEN 0 ELSE 1 END, `;
     } else {
@@ -269,7 +371,6 @@ export class DatabaseService {
 
   public trashNode(id: string, trashed: boolean): void {
     const now = trashed ? new Date().toISOString() : null;
-    // Recursively trash all descendants if it's a folder
     const targetIds = this.getDescendantIds(id);
     targetIds.push(id);
 
@@ -286,7 +387,6 @@ export class DatabaseService {
     const targetIds = this.getDescendantIds(id);
     targetIds.push(id);
 
-    // Find all object hashes associated with these nodes
     const placeholders = targetIds.map(() => '?').join(',');
     const rows = this.db.prepare(`SELECT object_hash FROM nodes WHERE id IN (${placeholders}) AND object_hash IS NOT NULL`).all(...targetIds) as any[];
     const hashesToCheck = rows.map(r => r.object_hash);
@@ -305,10 +405,25 @@ export class DatabaseService {
     return { deletedHashesToCheck: hashesToCheck };
   }
 
+  public purgeExpiredTrash(retentionDays: number = 7): { deletedHashesToCheck: string[] } {
+    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const rows = this.db.prepare(`
+      SELECT object_hash FROM nodes 
+      WHERE is_trashed = 1 AND trashed_at IS NOT NULL AND trashed_at <= ? AND object_hash IS NOT NULL
+    `).all(cutoffDate) as any[];
+    const hashesToCheck = rows.map(r => r.object_hash);
+
+    this.db.prepare(`
+      DELETE FROM nodes 
+      WHERE is_trashed = 1 AND trashed_at IS NOT NULL AND trashed_at <= ?
+    `).run(cutoffDate);
+
+    return { deletedHashesToCheck: hashesToCheck };
+  }
+
   public getDescendantIds(folderId: string): string[] {
     const ids: string[] = [];
     const queue = [folderId];
-
     const stmt = this.db.prepare('SELECT id, type FROM nodes WHERE parent_id = ?');
 
     while (queue.length > 0) {
@@ -328,7 +443,6 @@ export class DatabaseService {
   public getFolderAncestors(nodeId: string): Array<{ id: string; name: string }> {
     const breadcrumbs: Array<{ id: string; name: string }> = [];
     let currentId: string | null = nodeId;
-
     const stmt = this.db.prepare('SELECT id, parent_id, name FROM nodes WHERE id = ?');
 
     while (currentId) {
@@ -341,21 +455,106 @@ export class DatabaseService {
     return breadcrumbs;
   }
 
+  // --- Metrics & Analytics Breakdown ---
+
   public getMetricsSummary() {
     const totalFiles = (this.db.prepare("SELECT COUNT(*) as c FROM nodes WHERE type = 'file' AND is_trashed = 0").get() as any).c;
     const totalFolders = (this.db.prepare("SELECT COUNT(*) as c FROM nodes WHERE type = 'folder' AND is_trashed = 0").get() as any).c;
     const totalObjects = (this.db.prepare("SELECT COUNT(*) as c FROM objects").get() as any).c;
-    const vaultManagedBytes = (this.db.prepare("SELECT COALESCE(SUM(size), 0) as s FROM objects").get() as any).s;
+    const compressedObjectsCount = (this.db.prepare("SELECT COUNT(*) as c FROM objects WHERE is_compressed = 1").get() as any).c;
+
     const vaultRawLogicalBytes = (this.db.prepare("SELECT COALESCE(SUM(size), 0) as s FROM nodes WHERE type = 'file' AND is_trashed = 0").get() as any).s;
+    const vaultUniqueLogicalBytes = (this.db.prepare("SELECT COALESCE(SUM(size), 0) as s FROM objects").get() as any).s;
+    const vaultManagedBytes = (this.db.prepare("SELECT COALESCE(SUM(CASE WHEN is_compressed = 1 THEN compressed_size ELSE size END), 0) as s FROM objects").get() as any).s;
+
+    const deduplicatedSavingsBytes = Math.max(0, vaultRawLogicalBytes - vaultUniqueLogicalBytes);
+    const compressionSavingsBytes = Math.max(0, vaultUniqueLogicalBytes - vaultManagedBytes);
+    const totalSavingsBytes = deduplicatedSavingsBytes + compressionSavingsBytes;
+    const overallReductionPercentage = vaultRawLogicalBytes > 0 
+      ? Math.min(100, Math.max(0, (totalSavingsBytes / vaultRawLogicalBytes) * 100))
+      : 0;
+
+    const categorySavings = this.getCategorySavings();
 
     return {
       totalFiles,
       totalFolders,
       totalObjects,
-      vaultManagedBytes,
+      compressedObjectsCount,
       vaultRawLogicalBytes,
-      deduplicatedSavingsBytes: Math.max(0, vaultRawLogicalBytes - vaultManagedBytes),
+      vaultUniqueLogicalBytes,
+      vaultManagedBytes,
+      deduplicatedSavingsBytes,
+      compressionSavingsBytes,
+      totalSavingsBytes,
+      overallReductionPercentage,
+      categorySavings,
     };
+  }
+
+  public getCategorySavings(): CategorySavings[] {
+    const categories: { [cat: string]: { logical: number; physical: number; count: number } } = {
+      'Documents': { logical: 0, physical: 0, count: 0 },
+      'Code': { logical: 0, physical: 0, count: 0 },
+      'Images': { logical: 0, physical: 0, count: 0 },
+      'Videos': { logical: 0, physical: 0, count: 0 },
+      'Archives': { logical: 0, physical: 0, count: 0 },
+      'Other': { logical: 0, physical: 0, count: 0 },
+    };
+
+    const rows = this.db.prepare(`
+      SELECT n.name, n.mime_type, n.size as logical_size, 
+             COALESCE(CASE WHEN o.is_compressed = 1 THEN o.compressed_size ELSE o.size END, n.size) as physical_size,
+             COALESCE(o.ref_count, 1) as ref_count
+      FROM nodes n
+      LEFT JOIN objects o ON n.object_hash = o.hash
+      WHERE n.type = 'file' AND n.is_trashed = 0
+    `).all() as any[];
+
+    for (const r of rows) {
+      const name = (r.name || '').toLowerCase();
+      const mime = (r.mime_type || '').toLowerCase();
+      const ext = path.extname(name);
+
+      let catKey = 'Other';
+      if (
+        ['.js', '.ts', '.tsx', '.jsx', '.py', '.rs', '.go', '.c', '.cpp', '.h', '.cs', '.java', '.kt', '.sql', '.html', '.css', '.json', '.xml', '.yaml', '.yml', '.sh'].includes(ext)
+      ) {
+        catKey = 'Code';
+      } else if (
+        ['.txt', '.md', '.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.log', '.csv'].includes(ext) ||
+        mime.startsWith('text/') || mime.includes('pdf') || mime.includes('document') || mime.includes('sheet')
+      ) {
+        catKey = 'Documents';
+      } else if (mime.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif'].includes(ext)) {
+        catKey = 'Images';
+      } else if (mime.startsWith('video/') || ['.mp4', '.mkv', '.mov', '.avi', '.webm'].includes(ext)) {
+        catKey = 'Videos';
+      } else if (['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz'].includes(ext)) {
+        catKey = 'Archives';
+      }
+
+      // Attribute logical size to file, and physical size shared proportionally among refs
+      const refCount = Math.max(1, r.ref_count);
+      categories[catKey].logical += r.logical_size;
+      categories[catKey].physical += Math.round(r.physical_size / refCount);
+      categories[catKey].count++;
+    }
+
+    return Object.entries(categories).map(([category, stats]) => {
+      const savedBytes = Math.max(0, stats.logical - stats.physical);
+      const reductionPercentage = stats.logical > 0 
+        ? Math.min(100, Math.max(0, (savedBytes / stats.logical) * 100))
+        : 0;
+      return {
+        category,
+        logicalBytes: stats.logical,
+        physicalBytes: stats.physical,
+        savedBytes,
+        reductionPercentage,
+        fileCount: stats.count,
+      };
+    });
   }
 
   public close(): void {
@@ -363,6 +562,13 @@ export class DatabaseService {
   }
 
   private mapNode(row: any): VaultNode {
+    const isCompressed = row.is_compressed === 1;
+    const originalSize = row.size;
+    const compressedSize = isCompressed ? (row.compressed_size || row.size) : row.size;
+    const compressionRatio = isCompressed && originalSize > 0 
+      ? Number((originalSize / compressedSize).toFixed(2)) 
+      : 1;
+
     return {
       id: row.id,
       parentId: row.parent_id,
@@ -377,6 +583,10 @@ export class DatabaseService {
       createdAt: row.created_at,
       modifiedAt: row.modified_at,
       refCount: row.ref_count || 1,
+      isCompressed,
+      compressedSize,
+      compressionRatio,
+      compressionAlgo: row.compression_algo || null,
     };
   }
 }

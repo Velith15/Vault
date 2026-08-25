@@ -4,11 +4,12 @@ import {
   Download, 
   ExternalLink, 
   Sparkles, 
-  FileText,
-  Edit2,
-  Copy,
-  Check,
-  HardDrive
+  Edit2, 
+  Copy, 
+  Check, 
+  HardDrive,
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import { VaultNode, FilePreviewData } from '@shared/types';
 import { api } from '../services/api';
@@ -76,8 +77,7 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
   const extBadge = getFileExtensionLabel(node.name);
   const kindDesc = node.type === 'folder' ? 'Folder' : getFileKindDescription(node.name, node.mimeType);
 
-  // Construct readable path: Space > Subfolder1 > Subfolder2
-  const pathParts = ['Space', ...ancestors.map((a) => a.name)];
+  const pathParts = ['Vault', ...ancestors.map((a) => a.name)];
   const wherePath = pathParts.join(' › ');
 
   const handleCopyHash = () => {
@@ -89,31 +89,38 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
   };
 
   return (
-    <div className="w-[390px] h-screen bg-[#1E1E20] text-[#E4E4E7] border-l border-[#2E2E32] flex flex-col justify-between select-none text-[13px] shadow-2xl z-30 font-sans">
-      {/* Header Bar */}
-      <div className="h-12 border-b border-[#2E2E32] px-4 flex items-center justify-between">
-        <span className="text-[12px] font-medium tracking-wide uppercase text-[#A1A1AA]">Information</span>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-md hover:bg-[#2A2A2E] text-[#A1A1AA] hover:text-white transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+    <div 
+      className="fixed inset-0 z-50 bg-[#09090B]/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div 
+        className="w-[430px] max-h-[85vh] bg-[#18181B] text-[#E4E4E7] border border-[#27272A] rounded-2xl flex flex-col justify-between select-none text-[13px] shadow-2xl z-50 font-sans animate-in zoom-in-95 duration-150 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header Bar */}
+        <div className="h-12 border-b border-[#27272A] px-4.5 flex items-center justify-between bg-[#141416]">
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-semibold tracking-wide uppercase text-[#A1A1AA]">File Information</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md hover:bg-[#27272A] text-[#A1A1AA] hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-      {/* Main Info Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Top File Card (As per user's reference mockup) */}
+        {/* Main Info Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3.5 max-h-[calc(85vh-110px)]">
+        {/* Top File Card */}
         <div className="bg-[#262629] border border-[#333338] rounded-xl p-3.5 shadow-sm">
           <div className="flex items-center gap-3">
-            {/* Format Icon Badge */}
             <div className="w-12 h-12 rounded-xl bg-[#38383E] border border-[#484850] flex items-center justify-center flex-shrink-0 shadow-inner">
               <span className="font-mono font-bold text-[12px] tracking-wider text-white">
                 {extBadge}
               </span>
             </div>
 
-            {/* Title and modified quick date */}
             <div className="min-w-0 flex-1">
               <h2 className="font-medium text-white text-[14px] leading-tight truncate" title={node.name}>
                 {node.name}
@@ -123,14 +130,13 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
               </div>
             </div>
 
-            {/* Primary Size */}
             <div className="font-semibold text-white text-[15px] tabular-nums flex-shrink-0 pl-1">
               {node.type === 'folder' ? 'Folder' : formatBytes(node.size)}
             </div>
           </div>
         </div>
 
-        {/* Inline Media/Code Preview (if available) */}
+        {/* Inline Media/Code Preview */}
         {cat === 'image' && dataUrl ? (
           <div className="w-full bg-[#141416] border border-[#2E2E32] rounded-xl overflow-hidden flex items-center justify-center max-h-[190px]">
             <img src={dataUrl} alt={node.name} className="max-h-[190px] w-full object-contain" />
@@ -150,28 +156,71 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
           </div>
         ) : null}
 
-        {/* Detailed Spec Attributes Table (Mac style) */}
+        {/* Intelligent Storage & Compression Details */}
+        {node.type !== 'folder' && previewData && (
+          <div className="bg-[#262629]/90 border border-[#333338] rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between text-[12px] font-semibold text-white">
+              <span className="flex items-center gap-1.5">
+                <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
+                STORAGE OPTIMIZATION
+              </span>
+              {previewData.isCompressed ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  Lossless Zstd
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#38383E] text-[#A1A1AA]">
+                  Uncompressed
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[12px]">
+              <div className="p-2 bg-[#1A1A1C] rounded-lg border border-[#2E2E32]">
+                <div className="text-[#8E8E93] text-[10px]">Original Size</div>
+                <div className="font-mono text-[#F4F4F5] font-medium">{formatBytes(previewData.size)}</div>
+              </div>
+              <div className="p-2 bg-[#1A1A1C] rounded-lg border border-[#2E2E32]">
+                <div className="text-[#8E8E93] text-[10px]">Physical On Disk</div>
+                <div className="font-mono text-[#F4F4F5] font-medium">{formatBytes(previewData.physicalSize)}</div>
+              </div>
+            </div>
+
+            {previewData.isCompressed ? (
+              <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-[11.5px] flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-white">Saved {formatBytes(previewData.savedBytes)}</span>
+                  <div className="text-[10px] text-emerald-400">({previewData.reductionPercentage.toFixed(1)}% reduction)</div>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] text-emerald-400">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Verified</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-lg bg-[#1F1F23] border border-[#333338] text-[11px] text-[#A1A1AA] leading-snug">
+                Vault kept the original representation because this file is already compact or not beneficial to compress.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Detailed Spec Attributes Table */}
         <div className="bg-[#262629]/70 border border-[#333338] rounded-xl p-3.5 space-y-2.5 text-[12.5px]">
-          {/* Kind */}
           <div className="flex items-start">
             <span className="w-20 text-[#8E8E93] flex-shrink-0 font-medium">Kind:</span>
             <span className="text-[#F4F4F5] font-normal leading-snug break-words flex-1">{kindDesc}</span>
           </div>
 
-          {/* Size */}
           {node.type !== 'folder' && (
             <div className="flex items-start">
               <span className="w-20 text-[#8E8E93] flex-shrink-0 font-medium">Size:</span>
               <span className="text-[#F4F4F5] font-mono leading-snug flex-1">
-                {formatExactBytes(node.size)} bytes 
-                <span className="text-[#A1A1AA] font-sans text-[12px] ml-1.5">
-                  ({previewData && previewData.refCount > 1 ? `Shared CAS ref · ${formatBytes(node.size)}` : `${formatBytes(node.size)} on disk`})
-                </span>
+                {formatExactBytes(node.size)} bytes
               </span>
             </div>
           )}
 
-          {/* Where (Path) */}
           <div className="flex items-start">
             <span className="w-20 text-[#8E8E93] flex-shrink-0 font-medium">Where:</span>
             <span className="text-[#D4D4D8] font-sans text-[12px] leading-snug break-words flex-1">
@@ -179,13 +228,11 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
             </span>
           </div>
 
-          {/* Created */}
           <div className="flex items-start">
             <span className="w-20 text-[#8E8E93] flex-shrink-0 font-medium">Created:</span>
             <span className="text-[#F4F4F5] leading-snug flex-1">{formatDetailedDate(node.createdAt)}</span>
           </div>
 
-          {/* Modified */}
           <div className="flex items-start">
             <span className="w-20 text-[#8E8E93] flex-shrink-0 font-medium">Modified:</span>
             <span className="text-[#F4F4F5] leading-snug flex-1">{formatDetailedDate(node.modifiedAt)}</span>
@@ -194,12 +241,12 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
 
         {/* Deduplication & CAS Efficiency Info */}
         {previewData && previewData.refCount > 1 && (
-          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-[11.5px] space-y-1">
-            <div className="font-medium flex items-center gap-1.5 text-emerald-200">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-800/50 text-indigo-300 text-[11.5px] space-y-1">
+            <div className="font-medium flex items-center gap-1.5 text-indigo-200">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
               <span>Deduplicated in CAS Engine</span>
             </div>
-            <p className="text-[11px] text-emerald-400/90 leading-relaxed">
+            <p className="text-[11px] text-indigo-300/90 leading-relaxed">
               Referenced by <strong className="text-white">{previewData.refCount} files</strong> across Vault, saving <strong className="text-white">{formatBytes((previewData.refCount - 1) * previewData.size)}</strong> of physical disk space.
             </p>
           </div>
@@ -226,10 +273,10 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
       </div>
 
       {/* Bottom Action Footer */}
-      <div className="p-3 border-t border-[#2E2E32] flex items-center gap-2 bg-[#1A1A1C]">
+      <div className="p-3 border-t border-[#27272A] flex items-center gap-2 bg-[#141416]">
         <button
           onClick={() => onRename(node)}
-          className="h-8.5 px-3 rounded-lg border border-[#3E3E44] bg-[#28282C] text-[12px] font-medium text-white hover:bg-[#34343A] flex items-center justify-center gap-1.5 transition-colors"
+          className="h-8.5 px-3 rounded-lg border border-[#3E3E44] bg-[#27272A] text-[12px] font-medium text-white hover:bg-[#34343A] flex items-center justify-center gap-1.5 transition-colors"
           title="Rename file"
         >
           <Edit2 className="w-3.5 h-3.5 text-[#A1A1AA]" />
@@ -238,7 +285,7 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
 
         <button
           onClick={() => onOpenWithDefault(node)}
-          className="flex-1 h-8.5 rounded-lg border border-[#3E3E44] bg-[#28282C] text-[12px] font-medium text-white hover:bg-[#34343A] flex items-center justify-center gap-1.5 transition-colors"
+          className="flex-1 h-8.5 rounded-lg border border-[#3E3E44] bg-[#27272A] text-[12px] font-medium text-white hover:bg-[#34343A] flex items-center justify-center gap-1.5 transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5 text-[#A1A1AA]" />
           <span>Open</span>
@@ -253,6 +300,6 @@ export const PreviewDrawer: React.FC<PreviewDrawerProps> = ({
         </button>
       </div>
     </div>
+  </div>
   );
 };
-

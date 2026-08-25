@@ -135,4 +135,33 @@ describe('Vault Storage Engine & Database Service', () => {
     expect(fs.existsSync(tempFile)).toBe(false);
     expect(report.details.some((d) => d.includes('Cleaned up 1'))).toBe(true);
   });
+
+  it('prepares seamless native drag-out files with transparent integrity', async () => {
+    const sampleFilePath = path.join(tempDir, 'document_drag.pdf');
+    const content = 'PDF dummy payload for native Windows drag and drop test';
+    await fs.promises.writeFile(sampleFilePath, content, 'utf8');
+
+    const node = await storageEngine.importLocalFile(sampleFilePath);
+    const dragInfo = await storageEngine.prepareDragOut(node.id);
+
+    expect(dragInfo.fileName).toBe('document_drag.pdf');
+    expect(fs.existsSync(dragInfo.filePath)).toBe(true);
+    const diskContent = await fs.promises.readFile(dragInfo.filePath, 'utf8');
+    expect(diskContent).toBe(content);
+  });
+
+  it('purges expired trash items older than 7 days', async () => {
+    const sampleFilePath = path.join(tempDir, 'expired.txt');
+    await fs.promises.writeFile(sampleFilePath, 'test content', 'utf8');
+    const node = await storageEngine.importLocalFile(sampleFilePath);
+
+    // Trash node with timestamp 8 days in the past
+    const pastDate = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    dbService.trashNode(node.id, true);
+    (dbService as any).db.prepare('UPDATE nodes SET trashed_at = ? WHERE id = ?').run(pastDate, node.id);
+
+    await storageEngine.purgeExpiredTrash(7);
+    const fetched = dbService.getNodeById(node.id);
+    expect(fetched).toBeNull();
+  });
 });

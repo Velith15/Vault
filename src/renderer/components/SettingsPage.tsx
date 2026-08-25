@@ -10,12 +10,12 @@ import {
   Download,
   AlertCircle,
   RefreshCw,
-  Info
+  Zap,
+  Sliders
 } from 'lucide-react';
 import { api } from '../services/api';
-import { UpdateState } from '@shared/types';
+import { UpdateState, CompressionSettings, CompressionMode, CompressionProfile } from '@shared/types';
 import logoImg from '../assets/logo.jpg';
-
 import { ConfirmModal, ConfirmModalConfig } from './ConfirmModal';
 
 interface SettingsPageProps {
@@ -37,15 +37,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [running, setRunning] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [appVersion, setAppVersion] = useState<string>('0.2.50');
+  const [appVersion, setAppVersion] = useState<string>('0.2.511');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<ConfirmModalConfig | null>(null);
+
+  // Compression Settings State
+  const [compSettings, setCompSettings] = useState<CompressionSettings>({
+    autoCompression: true,
+    mode: 'automatic',
+    profile: 'BALANCED',
+    minSavingsThresholdPercent: 5,
+    minFileSizeToCompress: 1024,
+    backgroundCpuLimitPercent: 50,
+  });
 
   useEffect(() => {
     if (api?.getAppVersion) {
       api.getAppVersion().then((v) => setAppVersion(v)).catch(() => {});
     }
+    if (api?.getCompressionSettings) {
+      api.getCompressionSettings().then((s) => setCompSettings(s)).catch(() => {});
+    }
   }, []);
+
+  const handleUpdateSetting = async (key: keyof CompressionSettings, value: any) => {
+    const updated = { ...compSettings, [key]: value };
+    setCompSettings(updated);
+    if (api?.setCompressionSettings) {
+      await api.setCompressionSettings({ [key]: value });
+    }
+  };
 
   const handleEmptyTrash = () => {
     setConfirmConfig({
@@ -61,7 +82,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           setStatusMsg('Trash emptied and storage reclaimed successfully.');
           onRefresh();
         } catch (err: any) {
-          setStatusMsg(`Error: ${err.message}`);
+          setStatusMsg(`Error: ${err?.message || err}`);
         }
       },
     });
@@ -72,10 +93,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setStatusMsg(null);
     try {
       const report = await api.runIntegrityCheck();
-      setStatusMsg(`Integrity check complete: Database is ${report.databaseValid ? 'Valid' : 'Invalid'}. ${report.orphanedObjectsCount} orphans, ${report.missingObjectsCount} missing.`);
+      setStatusMsg(`Integrity check complete: Database is ${report.databaseValid ? 'healthy' : 'corrupted'}. ${report.compressedObjectsVerified} compressed objects verified, ${report.orphanedObjectsCount} orphans, ${report.missingObjectsCount} missing.`);
       onRefresh();
     } catch (err: any) {
-      setStatusMsg(`Integrity error: ${err.message}`);
+      setStatusMsg(`Integrity error: ${err?.message || err}`);
     } finally {
       setRunning(false);
     }
@@ -104,7 +125,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       <div>
         <h1 className="text-[18px] font-semibold text-[#09090B]">Vault Settings & Maintenance</h1>
         <p className="text-[12px] text-[#71717A] mt-0.5">
-          Virtual storage integrity, local privacy guarantees, and application updates.
+          Intelligent storage optimization, virtual integrity, and local privacy guarantees.
         </p>
       </div>
 
@@ -115,8 +136,102 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       )}
 
+      {/* Intelligent Compression Settings Card */}
+      <div className="bg-white rounded-xl border border-[#E4E4E7] p-5 space-y-4 shadow-2xs">
+        <div className="flex items-start justify-between">
+          <div className="space-y-0.5">
+            <h2 className="text-[15px] font-semibold text-[#09090B] flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" />
+              <span>Intelligent Lossless Compression</span>
+            </h2>
+            <p className="text-[12px] text-[#71717A]">
+              Automatically optimize files with Zstandard without loss of fidelity.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={compSettings.autoCompression} 
+              onChange={(e) => handleUpdateSetting('autoCompression', e.target.checked)} 
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-[#E4E4E7] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#D4D4D8] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#18181B]"></div>
+          </label>
+        </div>
+
+        <div className="pt-3 border-t border-[#F4F4F5] grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Optimization Mode */}
+          <div className="space-y-1.5">
+            <label className="text-[12px] font-medium text-[#09090B]">Compression Mode</label>
+            <select
+              value={compSettings.mode}
+              onChange={(e) => handleUpdateSetting('mode', e.target.value as CompressionMode)}
+              className="w-full h-8 px-2.5 bg-[#FAFAFA] border border-[#E4E4E7] rounded-md text-[12px] text-[#09090B] focus:border-[#18181B] outline-none"
+            >
+              <option value="automatic">Automatic (Intelligent Detection)</option>
+              <option value="maximum_savings">Maximum Savings (Prioritize Size)</option>
+              <option value="performance">Performance (Fast & Low Resource)</option>
+              <option value="off">Off (Disable Compression)</option>
+            </select>
+          </div>
+
+          {/* Compression Level Profile */}
+          <div className="space-y-1.5">
+            <label className="text-[12px] font-medium text-[#09090B]">Compression Profile</label>
+            <select
+              value={compSettings.profile}
+              onChange={(e) => handleUpdateSetting('profile', e.target.value as CompressionProfile)}
+              className="w-full h-8 px-2.5 bg-[#FAFAFA] border border-[#E4E4E7] rounded-md text-[12px] text-[#09090B] focus:border-[#18181B] outline-none"
+            >
+              <option value="BALANCED">Balanced (Zstd Level 3 - Default)</option>
+              <option value="FAST">Fast (Zstd Level 1 - Speed)</option>
+              <option value="MAXIMUM">Maximum (Zstd Level 9 - Highest Ratio)</option>
+            </select>
+          </div>
+
+          {/* Minimum Savings Threshold */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center text-[12px]">
+              <span className="font-medium text-[#09090B]">Minimum Savings Threshold</span>
+              <span className="font-mono text-[#71717A]">{compSettings.minSavingsThresholdPercent}%</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={20}
+              value={compSettings.minSavingsThresholdPercent}
+              onChange={(e) => handleUpdateSetting('minSavingsThresholdPercent', Number(e.target.value))}
+              className="w-full accent-[#18181B]"
+            />
+            <p className="text-[11px] text-[#71717A]">
+              Discard compression if file does not shrink by at least {compSettings.minSavingsThresholdPercent}%.
+            </p>
+          </div>
+
+          {/* Background CPU Throttle */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center text-[12px]">
+              <span className="font-medium text-[#09090B]">Background CPU Limit</span>
+              <span className="font-mono text-[#71717A]">{compSettings.backgroundCpuLimitPercent}%</span>
+            </div>
+            <input
+              type="range"
+              min={20}
+              max={100}
+              step={10}
+              value={compSettings.backgroundCpuLimitPercent}
+              onChange={(e) => handleUpdateSetting('backgroundCpuLimitPercent', Number(e.target.value))}
+              className="w-full accent-[#18181B]"
+            />
+            <p className="text-[11px] text-[#71717A]">
+              Controls resource consumption during background library optimizations.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* About Vault & Updates Section */}
-      <div className="bg-white rounded-lg border border-[#E4E4E7] p-5 space-y-4">
+      <div className="bg-white rounded-xl border border-[#E4E4E7] p-5 space-y-4 shadow-2xs">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <h2 className="font-serif text-[17px] font-medium text-[#09090B] flex items-center gap-2">
@@ -218,7 +333,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E4E4E7] divide-y divide-[#E4E4E7]">
+      <div className="bg-white rounded-xl border border-[#E4E4E7] divide-y divide-[#E4E4E7] shadow-2xs">
         {/* Integrity Verification */}
         <div className="p-4 flex items-center justify-between">
           <div className="space-y-0.5">
@@ -227,7 +342,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <span>Storage Integrity Scan</span>
             </div>
             <p className="text-[12px] text-[#71717A]">
-              Validate SQLite indexes, purge stale upload temporary files, and check SHA-256 CAS object references.
+              Validate SQLite indexes, verify SHA-256 CAS object payloads, and ensure container health.
             </p>
           </div>
           <button
@@ -267,7 +382,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <span>Import Behavior (Move from Desktop)</span>
             </div>
             <p className="text-[12px] text-[#71717A]">
-              When files are imported into Vault, move them into Vault storage and delete the original copy from your desktop/source folder.
+              When files are imported into Vault, move them into Vault storage and delete the original copy from source folder.
             </p>
           </div>
           <span className="px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-medium">
@@ -282,7 +397,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <span>Local-First & Zero Telemetry</span>
           </div>
           <p className="text-[12px] text-[#71717A] leading-relaxed">
-            Vault executes 100% locally on your machine. All content addressing, SHA-256 checksums, SQLite indexing, and previews run in-process without network egress or external cloud calls.
+            Vault executes 100% locally on your machine. All Zstandard compression, deduplication, SHA-256 checksums, SQLite indexing, and previews run in-process without network egress or cloud telemetry.
           </p>
         </div>
       </div>
@@ -294,4 +409,3 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     </div>
   );
 };
-

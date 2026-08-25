@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 import { DatabaseService } from '../database/DatabaseService';
 import { StorageMetrics } from '../../../shared/types';
 
@@ -19,7 +19,6 @@ export class StorageMetricsService {
     let usedDiskSpace = 256 * 1024 * 1024 * 1024;
 
     try {
-      // Node.js v18.15+ supports fs.statfs
       if (typeof fs.statfs === 'function') {
         const stats = await fs.promises.statfs(this.baseDir);
         const bsize = stats.bsize || 4096;
@@ -27,9 +26,7 @@ export class StorageMetricsService {
         availableDiskSpace = stats.bavail * bsize;
         usedDiskSpace = totalDiskSpace - availableDiskSpace;
       }
-    } catch {
-      // Keep sensible fallbacks if statfs fails on specific permissions
-    }
+    } catch {}
 
     return {
       totalDiskSpace,
@@ -37,11 +34,17 @@ export class StorageMetricsService {
       usedDiskSpace,
       vaultManagedBytes: dbSummary.vaultManagedBytes,
       vaultRawLogicalBytes: dbSummary.vaultRawLogicalBytes,
+      vaultUniqueLogicalBytes: dbSummary.vaultUniqueLogicalBytes,
       deduplicatedSavingsBytes: dbSummary.deduplicatedSavingsBytes,
+      compressionSavingsBytes: dbSummary.compressionSavingsBytes,
+      totalSavingsBytes: dbSummary.totalSavingsBytes,
+      overallReductionPercentage: dbSummary.overallReductionPercentage,
       totalFiles: dbSummary.totalFiles,
       totalFolders: dbSummary.totalFolders,
       totalObjects: dbSummary.totalObjects,
+      compressedObjectsCount: dbSummary.compressedObjectsCount,
       vaultPath: this.baseDir,
+      categorySavings: dbSummary.categorySavings,
     };
   }
 }

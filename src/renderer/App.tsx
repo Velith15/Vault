@@ -203,10 +203,13 @@ export const App: React.FC = () => {
     if (node.type === 'folder') {
       setCurrentFolderId(node.id);
       setActiveTab('files');
-      setSelectedNode(null);
     } else {
-      setSelectedNode(node);
+      handleOpenWithDefault(node);
     }
+  };
+
+  const handleGetInfo = (node: VaultNode) => {
+    setSelectedNode(node);
   };
 
   const handleToggleStar = async (node: VaultNode, e: React.MouseEvent) => {
@@ -242,6 +245,48 @@ export const App: React.FC = () => {
     } catch (err: any) {
       showAlert('Rename Error', `Rename failed: ${err.message}`);
     }
+  };
+
+  const handleTrashNode = (node: VaultNode) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: `Move "${node.name}" to Trash?`,
+      message: `This item will be moved to the Trash. Items in Trash are automatically deleted after 7 days, or you can restore it at any time.`,
+      confirmText: 'Move to Trash',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.trashNode(node.id, true);
+          if (selectedNode?.id === node.id) setSelectedNode(null);
+          fetchNodes();
+          fetchMetrics();
+        } catch (err: any) {
+          showAlert('Trash Error', `Failed to move to Trash: ${err.message}`);
+        }
+      },
+    });
+  };
+
+  const handleTrashMultiple = (targetNodes: VaultNode[]) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: `Move ${targetNodes.length} items to Trash?`,
+      message: `Move ${targetNodes.length} items to the Trash? Items in Trash are automatically deleted after 7 days.`,
+      confirmText: 'Move to Trash',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await Promise.all(targetNodes.map(n => api.trashNode(n.id, true)));
+          if (selectedNode && targetNodes.some(n => n.id === selectedNode.id)) setSelectedNode(null);
+          fetchNodes();
+          fetchMetrics();
+        } catch (err: any) {
+          showAlert('Trash Error', `Failed to move items to Trash: ${err.message}`);
+        }
+      },
+    });
   };
 
   const handleDeletePermanent = (node: VaultNode) => {
@@ -477,17 +522,18 @@ export const App: React.FC = () => {
             <FileList
               nodes={nodes}
               viewMode={viewMode}
-              selectedNodeId={selectedNode?.id || null}
-              onSelectNode={(node) => setSelectedNode(node)}
+              selectedNodeId={null}
+              onSelectNode={() => {}}
               onOpenNode={handleOpenNode}
+              onGetInfo={handleGetInfo}
               onToggleStar={handleToggleStar}
               onRenameNode={handleOpenRenameModal}
-              onTrashNode={handleDeletePermanent}
+              onTrashNode={handleTrashNode}
               onRestoreNode={handleRestoreNode}
               onDeletePermanent={handleDeletePermanent}
               onExportNode={handleExportNode}
               onOpenWithDefault={handleOpenWithDefault}
-              onTrashMultiple={handleDeletePermanentMultiple}
+              onTrashMultiple={handleTrashMultiple}
               onRestoreMultiple={handleRestoreMultiple}
               onDeletePermanentMultiple={handleDeletePermanentMultiple}
               onExportMultiple={handleExportMultiple}

@@ -1,14 +1,14 @@
 {
   "name": "vault-desktop",
-  "version": "0.2.511",
+  "version": "0.2.512",
   "description": "Vault - Local-First Virtual Storage",
   "main": "dist/main/main/main.js",
   "scripts": {
     "dev": "tsc -p tsconfig.node.json && concurrently -k -p \"[{name}]\" -n \"VITE,ELECTRON\" -c \"cyan,magenta\" \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build": "tsc -p tsconfig.node.json && vite build",
-    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
-    "rebuild:node": "npm rebuild better-sqlite3",
+    "rebuild:electron": "electron-rebuild -f -o better-sqlite3",
+    "rebuild:node": "npm rebuild @mongodb-js/zstd better-sqlite3",
     "test": "npm run rebuild:node && vitest run && npm run rebuild:electron",
     "package": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder"
@@ -53,9 +53,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@mongodb-js/zstd": "^7.0.0",
     "better-sqlite3": "^11.8.1",
     "clsx": "^2.1.1",
     "electron-updater": "^6.3.9",
+    "fzstd": "^0.1.1",
     "lucide-react": "^1.16.0",
     "mime-types": "^2.1.35",
     "tailwind-merge": "^3.0.1"
